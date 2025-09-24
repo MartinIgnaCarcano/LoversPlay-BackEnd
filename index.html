@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Productos Dinámicos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            margin-top: 50px;
+        }
+
+        .card {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            width: 400px;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+        }
+
+        .main-image-container {
+            width: 100%;
+            height: 250px;
+            margin-bottom: 15px;
+            position: relative;
+        }
+
+        .main-image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 6px;
+        }
+
+        .carousel-container {
+            display: flex;
+            overflow-x: auto; /* Permite el scroll horizontal si hay muchas imágenes */
+            scroll-snap-type: x mandatory; /* Alinea las imágenes al hacer scroll */
+            margin-top: 15px;
+            padding-bottom: 10px; /* Espacio para la barra de scroll */
+            position: relative;
+        }
+
+        .carousel-container::-webkit-scrollbar {
+            height: 8px; /* Altura de la barra de scroll */
+        }
+
+        .carousel-container::-webkit-scrollbar-track {
+            background: #f1f1f1; /* Color de fondo de la barra de scroll */
+            border-radius: 10px;
+        }
+
+        .carousel-container::-webkit-scrollbar-thumb {
+            background: #888; /* Color del "pulgar" de la barra de scroll */
+            border-radius: 10px;
+        }
+
+        .carousel-container::-webkit-scrollbar-thumb:hover {
+            background: #555; /* Color del "pulgar" al pasar el mouse */
+        }
+
+        .carousel-image {
+            flex: 0 0 auto; /* Evita que las imágenes se expandan o contraigan */
+            width: 80px; /* Ancho de cada imagen del carrusel */
+            height: 80px;
+            margin-right: 10px; /* Espacio entre imágenes */
+            object-fit: cover; /* Asegura que la imagen cubra el área */
+            cursor: pointer;
+            border-radius: 4px;
+            scroll-snap-align: center; /* Alinea la imagen al centro en el scroll */
+        }
+
+        .carousel-image.active {
+            border: 2px solid #007bff; /* Resalta la imagen activa */
+        }
+
+        .card h2 {
+            margin: 10px 0;
+            font-size: 1.3em;
+        }
+
+        .card p {
+            font-size: 0.9em;
+            color: #555;
+            text-align: left;
+        }
+
+        .precio {
+            font-weight: bold;
+            margin-top: 10px;
+            font-size: 1.1em;
+            color: #222;
+        }
+
+        .btn-product-next,
+        .btn-product-prev {
+            position: absolute;
+            top: -40px;
+            background: #222;
+            color: #fff;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .btn-product-prev {
+            left: 0;
+        }
+
+        .btn-product-next {
+            right: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card" id="producto-card">
+        <p>Cargando producto...</p>
+        <button class="btn-product-prev">← Producto anterior</button>
+        <button class="btn-product-next">Producto siguiente →</button>
+    </div>
+
+    <script>
+        // IDs de productos a recorrer
+        const productosIds = [22, 26, 33, 44, 48, 56, 64, 67, 71, 75, 83, 87, 91, 98, 109, 133, 145, 152, 156, 159, 164, 167, 170, 177, 187, 212, 215, 224, 235, 240, 245, 251, 254, 258, 261, 271, 274, 278, 286, 304, 308, 313, 321, 332, 343, 366, 384, 388, 399, 409, 416, 419, 424, 428, 431, 436, 445, 448, 458, 462, 465, 469, 472, 499, 502, 505, 508, 512, 516, 520, 528, 535, 539, 546, 553, 565, 581, 593, 602, 627, 630, 638, 641, 644, 658, 662, 666, 671, 674, 690, 701, 704, 723, 727, 731, 737, 745, 758, 762, 767, 771, 778, 783, 792, 796, 799, 803, 806, 810, 814, 818, 822, 826, 830, 834, 842, 853, 856, 859, 863, 867, 872, 875, 878, 882, 885, 889, 893, 897, 901, 905, 909, 913, 917, 923, 934, 937, 941, 945, 3642, 4024, 4040, 4122, 4385, 4408, 4441, 4469, 4509, 4514, 4526, 4530, 4534, 4557, 4591, 4626, 4631, 4672, 4776, 4781, 4873, 4909, 4958, 5090, 5095, 5098, 5113, 5138, 5178, 5186, 5192, 5198, 5206, 5215, 5223, 5248, 5252, 5257, 5265, 5275, 5290, 5298, 5300, 5319, 5331, 5335, 5341, 5361, 5375, 5379, 5405, 5430, 5443, 5447, 5453, 5461, 5465, 5467, 5473, 5480, 5491, 5511, 5515, 5543, 5558, 5588, 5596, 5604, 5625, 5632, 5636, 5647, 5651, 5668, 5674, 5677, 5680, 5685, 5690, 5703, 5710, 5712, 5721, 5725, 5730, 5749, 5767, 5780, 5787, 5791, 5925, 5929, 5933, 5970, 5974, 5978, 5983, 5989, 5993, 5997, 6004, 6008, 6013, 6017, 6021, 6028, 6032, 6036, 6043, 6047, 6054, 6058, 6066, 6071, 6078, 6082, 6093, 6116, 6155, 6159, 6163, 6175, 6191, 6197, 6215, 6220, 6224, 6228, 6238, 6242, 6246, 6254, 6262, 6265, 6278, 6283, 6297, 6301, 6306, 6316, 6325, 6334, 6348, 6352, 6363, 6368, 6374, 6379, 6383, 6388, 6392, 6397, 6403, 6407, 6431, 6441, 6448, 6452, 6457, 6463, 6465, 6478, 6512, 6516, 6523, 6526, 6534, 6538, 6545, 6552, 6573, 6580, 6586, 6608, 6630, 6636, 6644, 6650, 6658, 6662, 6666, 6670];
+        let indexActual = 0;
+        let currentImageIndex = 0; // Para controlar la imagen actual en el carrusel
+
+        const card = document.getElementById('producto-card');
+        const btnNextProducto = card.querySelector('.btn-product-next');
+        const btnPrevProducto = card.querySelector('.btn-product-prev');
+
+        function cargarProducto(id) {
+            const apiUrl = `http://127.0.0.1:5000/api/productos/${id}`;
+            fetch(apiUrl)
+                .then(res => {
+                    if (!res.ok) throw new Error('Error al cargar el producto');
+                    return res.json();
+                })
+                .then(producto => {
+                    // Crear el HTML para la imagen principal
+                    let mainImageHTML = '<div class="main-image-container">';
+                    if (producto.url_imagen_principal) {
+                        mainImageHTML += `<img src="${producto.url_imagen_principal}" alt="${producto.nombre}">`;
+                    } else if (producto.imagenes && producto.imagenes.length > 0) {
+                        mainImageHTML += `<img src="${producto.imagenes[0]}" alt="${producto.nombre}">`; // Usa la primera de las secundarias si no hay principal
+                    } else {
+                        mainImageHTML += `<p>Imagen no disponible</p>`;
+                    }
+                    mainImageHTML += '</div>';
+
+                    // Crear el HTML para el carrusel de imágenes secundarias
+                    let carouselHTML = '<div class="carousel-container">';
+                    if (producto.imagenes && producto.imagenes.length > 0) {
+                        producto.imagenes.forEach((url, idx) => {
+                            carouselHTML += `<img src="${url}" class="carousel-image ${idx === 0 ? 'active' : ''}" data-index="${idx}" alt="${producto.nombre} - Imagen ${idx + 1}">`;
+                        });
+                    }
+                    carouselHTML += '</div>';
+
+                    // Cargar contenido en la tarjeta
+                    card.innerHTML = `
+                        ${mainImageHTML}
+                        ${carouselHTML}
+                        <h1>ID: ${producto.id}</h1>
+                        <h2>${producto.nombre}</h2>
+                        <div class="precio">$${producto.precio.toLocaleString('es-AR')}</div>
+                        <p>${producto.descripcion_corta}</p>
+                        <div>${producto.descripcion_larga}</div>
+                        <button class="btn-product-prev">← Producto anterior</button>
+                        <button class="btn-product-next">Producto siguiente →</button>
+                    `;
+
+                    // Inicializar el carrusel de imágenes
+                    const carouselImages = card.querySelectorAll('.carousel-image');
+                    const mainImageElement = card.querySelector('.main-image-container img');
+
+                    carouselImages.forEach(img => {
+                        img.addEventListener('click', () => {
+                            // Eliminar la clase 'active' de todas las imágenes del carrusel
+                            carouselImages.forEach(item => item.classList.remove('active'));
+                            // Añadir la clase 'active' a la imagen clickeada
+                            img.classList.add('active');
+                            // Cambiar la imagen principal
+                            if (mainImageElement) {
+                                mainImageElement.src = img.src;
+                                mainImageElement.alt = img.alt;
+                            }
+                            // Actualizar el índice de la imagen actual
+                            currentImageIndex = parseInt(img.dataset.index);
+                        });
+                    });
+
+                    // Reasignar botones de cambio de producto
+                    // Asegúrate de que estos listeners se añadan DESPUÉS de que se haya reconstruido el innerHTML de la tarjeta
+                    card.querySelector('.btn-product-next').addEventListener('click', () => {
+                        indexActual = (indexActual + 1) % productosIds.length;
+                        cargarProducto(productosIds[indexActual]);
+                    });
+                    card.querySelector('.btn-product-prev').addEventListener('click', () => {
+                        indexActual = (indexActual - 1 + productosIds.length) % productosIds.length;
+                        cargarProducto(productosIds[indexActual]);
+                    });
+                })
+                .catch(err => {
+                    card.innerHTML = `<p>Error: ${err.message}</p>`;
+                });
+        }
+
+        // Cargar primer producto
+        cargarProducto(productosIds[indexActual]);
+    </script>
+
+</body>
+</html>
