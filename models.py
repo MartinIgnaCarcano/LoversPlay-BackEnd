@@ -12,8 +12,8 @@ class Usuario(db.Model):
     telefono = db.Column(db.String(20))
     rol = db.Column(db.String(20), default="cliente")  # cliente, admin
     pedidos = db.relationship("Pedido", backref="usuario", lazy=True)
-    resenas = db.relationship("Resena", backref="usuario", lazy=True)
-    direcciones = db.relationship("Direccion", backref="usuario", lazy=True)
+    resenas = db.relationship("Resena", backref="usuario", lazy=True, cascade="all, delete-orphan")
+    direcciones = db.relationship("Direccion", backref="usuario", lazy=True, cascade="all, delete-orphan")
     # Guardar password en hash
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -47,7 +47,6 @@ class Producto(db.Model):
     nombre = db.Column(db.String(150), nullable=False)  # Corresponde a 'name'
     slug = db.Column(db.String(150), unique=True, nullable=False) # Nuevo atributo para 'slug'
     precio = db.Column(db.Float, nullable=False) # Corresponde a 'price'
-    cantidad_resenas = db.Column(db.Integer, default=0) # Nuevo atributo para 'reviewsCount'
     descripcion_corta = db.Column(db.String(255)) # Nuevo atributo para 'shortDesc'
     descripcion_larga = db.Column(db.Text) # Corresponde a 'description'
     stock = db.Column(db.Integer, default=0) # Mantenido, corresponde a 'stock'
@@ -76,13 +75,13 @@ class Pedido(db.Model):
     estado = db.Column(db.String(50), default="pendiente")
     usuario_id = db.Column(db.Integer, db.ForeignKey("usuarios.id"), nullable=False)
     total = db.Column(db.Float, default=0)
-    
-    detalles = db.relationship("PedidoDetalle", backref="pedido", lazy=True)
-    
+
+    detalles = db.relationship("PedidoDetalle", backref="pedido", lazy=True, passive_deletes=True)
+
 class PedidoDetalle(db.Model):
     __tablename__ = "pedido_detalle"
     id = db.Column(db.Integer, primary_key=True)
-    pedido_id = db.Column(db.Integer, db.ForeignKey("pedidos.id"), nullable=False)
+    pedido_id = db.Column(db.Integer, db.ForeignKey("pedidos.id", ondelete="CASCADE"), nullable=False)
     producto_id = db.Column(db.Integer, db.ForeignKey("productos.id"), nullable=False)
     cantidad = db.Column(db.Integer, nullable=False)
     subtotal = db.Column(db.Float, nullable=False)

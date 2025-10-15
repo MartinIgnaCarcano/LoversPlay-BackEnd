@@ -144,19 +144,39 @@ def detalle_pedido(id):
 
 # Actualizar estado del pedido (solo admin para cambiar a ENVIADO o ENTREGADO)
 @pedidos_bp.route("/<int:id>", methods=["PATCH"])
+@jwt_required()
 def actualizar_pedido(id):
-    current = get_jwt_identity()
+    user_id = get_jwt_identity()
+    user = Usuario.query.get(user_id)
+    
+    if not user or user.rol != "ADMIN":
+        return jsonify({"error": "acceso denegado"}), 404
+    print("Gola")
     data = request.get_json() or {}
     pedido = Pedido.query.get_or_404(id)
 
     # Solo admin puede cambiar estado
     if "estado" in data:
-        if current.get("rol") != "ADMIN":
-            return jsonify({"error": "Acceso denegado"}), 403
         pedido.estado = data["estado"]
 
     db.session.commit()
     return jsonify({"message": "Pedido actualizado", "estado": pedido.estado})
+
+@pedidos_bp.route("/<int:id>", methods=["DELETE"])
+@jwt_required()
+def eliminar_pedido(id):
+    user_id = get_jwt_identity()
+    user = Usuario.query.get(user_id)
+    if not user or user.rol != "ADMIN":
+        return jsonify({"error": "acceso denegado"}), 404
+
+    pedido = Pedido.query.get(id)
+    
+    if not pedido:
+        return jsonify({"error": "Pedido no encontrado"}), 404
+    db.session.delete(pedido)
+    db.session.commit()
+    return jsonify({"message": "Pedido eliminado"}), 204
 
 # @pedidos_bp.route("/notificacion", methods=["POST"])
 # def notificacion():

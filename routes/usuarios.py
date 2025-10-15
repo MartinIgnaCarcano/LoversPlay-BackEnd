@@ -5,8 +5,8 @@ from database import db
 
 usuarios_bp = Blueprint("usuarios", __name__,url_prefix="/api/usuarios")
 
-# @usuarios_bp.route("/", methods=["GET"])
-# def listar_usuarios():
+@usuarios_bp.route("/", methods=["GET"])
+def listar_usuarios():
     usuarios = Usuario.query.all()
     return jsonify([
         {
