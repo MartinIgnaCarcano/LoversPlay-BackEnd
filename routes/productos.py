@@ -76,6 +76,7 @@ def listar_productos():
                     "nombre": p.nombre,
                     "precio": p.precio,
                     "url_imagen_principal": p.url_imagen_principal,
+                    "url_imagen_secundaria": p.imagenes[0].url_imagen if p.imagenes else None,
                     "stock": p.stock,
                     "vistas": p.vistas,
                     "valoracion_promedio": p.valoracion_promedio,
@@ -109,7 +110,8 @@ def detalle_producto(id):
                 "id": s.id,
                 "nombre": s.nombre,
                 "precio": s.precio,
-                "url_imagen_principal": s.url_imagen_principal
+                "url_imagen_principal": s.url_imagen_principal,
+                "url_imagen_secundaria": s.imagenes[0].url_imagen if s.imagenes else None
             }
             for s in sugeridos
         ]
@@ -163,6 +165,7 @@ def listar_todos_productos():
                     "nombre": p.nombre,
                     "precio": p.precio,
                     "url_imagen_principal": p.url_imagen_principal,
+                    "url_imagen_secundaria": p.imagenes[0].url_imagen if p.imagenes else None,
                     "stock": p.stock,
                     "vistas": p.vistas,
                     "valoracion_promedio": p.valoracion_promedio,

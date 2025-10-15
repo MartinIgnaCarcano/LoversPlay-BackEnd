@@ -70,14 +70,20 @@ def obtener_usuario():
     if not user:
         return jsonify({"error": "Usuario no encontrado"}), 404
 
-    direcciones = [{
-        "direccion": f"{d.calle}, {d.codigo_postal}, {d.provincia}, {d.pais}",
-    } for d in user.direcciones]
     return jsonify({
         "id": user.id,
         "nombre": user.nombre,
         "email": user.email,
-        "direcciones": direcciones,
+        "direcciones": [{
+            "id": d.id,
+            "usuario_id": d.usuario_id,
+            "calle": d.calle,
+            "provincia": d.provincia,
+            "departamento": d.departamento,
+            "codigo_postal": d.codigo_postal,
+            "pais": d.pais,
+            "extra": d.extra
+        } for d in user.direcciones],
         "telefono": user.telefono,
         "rol": user.rol,
         "fecha_registro": user.fecha_registro.isoformat()

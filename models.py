@@ -32,6 +32,7 @@ class Direccion(db.Model):
     pais = db.Column(db.String(100), nullable=False)
     extra = db.Column(db.String(200))
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
+    departamento = db.Column(db.String(100)) # Opcional  
 
 class Categoria(db.Model):
     __tablename__ = "categorias"
