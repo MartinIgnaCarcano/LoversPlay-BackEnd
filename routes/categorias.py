@@ -1,7 +1,8 @@
 import os
 from flask import Blueprint, request, jsonify, current_app
 from werkzeug.utils import secure_filename
-from models import db, Categoria
+from models import db, Categoria, Producto
+from sqlalchemy import func
 
 categorias_bp = Blueprint("categorias", __name__, url_prefix="/api/categorias")
 
@@ -37,11 +38,31 @@ def crear_categoria():
     db.session.commit()
     return jsonify({"id": categoria.id, "nombre": categoria.nombre, "url_imagen": categoria.url_imagen}), 201
 
-# Listar todas
 @categorias_bp.route("/", methods=["GET"])
 def listar_categorias():
-    categorias = Categoria.query.all()
-    data = [{"id": c.id, "nombre": c.nombre, "url_imagen": c.url_imagen} for c in categorias]
+    categorias = (
+        db.session.query(
+            Categoria.id,
+            Categoria.nombre,
+            Categoria.url_imagen,
+            func.count(Producto.id).label("cantidad_productos")
+        )
+        .outerjoin(Producto, Categoria.id == Producto.categoria_id)
+        .group_by(Categoria.id)
+        .order_by(func.count(Producto.id).desc())  # 🔽 de mayor a menor
+        .all()
+    )
+
+    data = [
+        {
+            "id": c.id,
+            "nombre": c.nombre,
+            "url_imagen": c.url_imagen,
+            "cantidad_productos": c.cantidad_productos
+        }
+        for c in categorias
+    ]
+
     return jsonify(data)
 
 # Obtener una categoría

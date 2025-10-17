@@ -5,7 +5,68 @@ from database import db
 import mercadopago
 
 pedidos_bp = Blueprint("pedidos", __name__,url_prefix="/api/pedidos")
-# sdk = mercadopago.SDK("TEST-6608167090676875-091814-964957d986e21eee913f06709c51abeb-2611950632")
+sdk = mercadopago.SDK("APP_USR-4359190007341448-101608-cf1c6122b82c02e35a1c9d3f28adef05-2611950632")
+
+
+@pedidos_bp.route("/pruebas", methods=["POST"])
+def pruebas():
+    data = request.get_json() or {}
+    if(data.get("metodo") != "credito"):
+        print("excluyendo debito")
+        excluidos = [
+            { "id": "cabal" },
+            { "id": "amex" },
+            { "id": "diners" },
+            { "id": "visa" },
+            { "id": "master" },
+            { "id": "naranja" },
+            { "id": "argencard" }
+        ]
+    else:
+        excluidos = []
+        
+    preference_data = {
+        
+        "items": [
+            {
+                "title": "Mi producto",
+                "quantity": 1,
+                "unit_price": 75.76,
+                "currency_id": "ARS"
+            }
+        ],
+        "back_urls": {
+            "success": "https://www.tu-sitio.com/success",
+            "failure": "https://www.tu-sitio.com/failure",
+            "pending": "https://www.tu-sitio.com/pending"
+        },
+        "auto_return": "approved",
+        "notification_url": "https://mckenzie-burthensome-denita.ngrok-free.dev/api/pedidos/notificacion"
+    }
+
+    preference_response = sdk.preference().create(preference_data)
+    preference = preference_response["response"]
+
+    return jsonify({
+        "message": "Preferencia creada correctamente",
+        "id": preference.get("id"),
+        "init_point": preference.get("init_point"),
+        "sandbox_init_point": preference.get("sandbox_init_point")
+    }), 201
+
+@pedidos_bp.route("/notificacion", methods=["POST"])
+def notificacion_mp():
+    print("Notificación recibida de Mercado Pago")
+    print(request.json)
+    return jsonify({"message": "Notificación recibida"}), 200
+
+
+
+
+
+
+
+
 
 # Listar pedidos del usuario logueado
 @pedidos_bp.route("/", methods=["GET"], strict_slashes=False)
@@ -33,6 +94,64 @@ def listar_pedidos():
         ])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# Ver detalle de un pedido
+@pedidos_bp.route("/unico/<int:id>", methods=["GET"])
+def detalle_pedido(id):
+    pedido = Pedido.query.get(id)
+    if not pedido:
+        return jsonify({"error": "Pedido no encontrado"}), 404
+
+    return jsonify({
+        "id": pedido.id,
+        "estado": pedido.estado,
+        "total": pedido.total,
+        "fecha_creacion": pedido.fecha_creacion.isoformat(),
+        "detalles": [
+            {
+                "producto": i.producto.nombre,
+                "cantidad": i.cantidad,
+                "precio_unitario": i.precio_unitario,
+                "subtotal": i.subtotal
+            } for i in pedido.detalles
+        ]
+    })
+
+# Actualizar estado del pedido (solo admin para cambiar a ENVIADO o ENTREGADO)
+@pedidos_bp.route("/<int:id>", methods=["PATCH"])
+@jwt_required()
+def actualizar_pedido(id):
+    user_id = get_jwt_identity()
+    user = Usuario.query.get(user_id)
+    
+    if not user or user.rol != "ADMIN":
+        return jsonify({"error": "acceso denegado"}), 404
+    
+    data = request.get_json() or {}
+    pedido = Pedido.query.get_or_404(id)
+
+    # Solo admin puede cambiar estado
+    if "estado" in data:
+        pedido.estado = data["estado"]
+
+    db.session.commit()
+    return jsonify({"message": "Pedido actualizado", "estado": pedido.estado})
+
+@pedidos_bp.route("/<int:id>", methods=["DELETE"])
+@jwt_required()
+def eliminar_pedido(id):
+    user_id = get_jwt_identity()
+    user = Usuario.query.get(user_id)
+    if not user or user.rol != "ADMIN":
+        return jsonify({"error": "acceso denegado"}), 404
+
+    pedido = Pedido.query.get(id)
+    
+    if not pedido:
+        return jsonify({"error": "Pedido no encontrado"}), 404
+    db.session.delete(pedido)
+    db.session.commit()
+    return jsonify({"message": "Pedido eliminado"}), 204
 
 # Crear un pedido manual (sin mp por el momento)
 @pedidos_bp.route("/", methods=["POST"])
@@ -120,107 +239,5 @@ def crear_pedido_con_pago():
         print(str(e))
         return jsonify({"error": str(e)}), 500
 
-# Ver detalle de un pedido
-@pedidos_bp.route("/unico/<int:id>", methods=["GET"])
-def detalle_pedido(id):
-    pedido = Pedido.query.get(id)
-    if not pedido:
-        return jsonify({"error": "Pedido no encontrado"}), 404
 
-    return jsonify({
-        "id": pedido.id,
-        "estado": pedido.estado,
-        "total": pedido.total,
-        "fecha_creacion": pedido.fecha_creacion.isoformat(),
-        "detalles": [
-            {
-                "producto": i.producto.nombre,
-                "cantidad": i.cantidad,
-                "precio_unitario": i.precio_unitario,
-                "subtotal": i.subtotal
-            } for i in pedido.detalles
-        ]
-    })
 
-# Actualizar estado del pedido (solo admin para cambiar a ENVIADO o ENTREGADO)
-@pedidos_bp.route("/<int:id>", methods=["PATCH"])
-@jwt_required()
-def actualizar_pedido(id):
-    user_id = get_jwt_identity()
-    user = Usuario.query.get(user_id)
-    
-    if not user or user.rol != "ADMIN":
-        return jsonify({"error": "acceso denegado"}), 404
-    print("Gola")
-    data = request.get_json() or {}
-    pedido = Pedido.query.get_or_404(id)
-
-    # Solo admin puede cambiar estado
-    if "estado" in data:
-        pedido.estado = data["estado"]
-
-    db.session.commit()
-    return jsonify({"message": "Pedido actualizado", "estado": pedido.estado})
-
-@pedidos_bp.route("/<int:id>", methods=["DELETE"])
-@jwt_required()
-def eliminar_pedido(id):
-    user_id = get_jwt_identity()
-    user = Usuario.query.get(user_id)
-    if not user or user.rol != "ADMIN":
-        return jsonify({"error": "acceso denegado"}), 404
-
-    pedido = Pedido.query.get(id)
-    
-    if not pedido:
-        return jsonify({"error": "Pedido no encontrado"}), 404
-    db.session.delete(pedido)
-    db.session.commit()
-    return jsonify({"message": "Pedido eliminado"}), 204
-
-# @pedidos_bp.route("/notificacion", methods=["POST"])
-# def notificacion():
-#     try:
-#         data = request.get_json()
-
-#         if not data or "id" not in data or "topic" not in data:
-#             return jsonify({"error": "Notificación inválida"}), 400
-
-#         # Procesamos solo notificaciones de pagos
-#         if data["topic"] == "payment":
-#             payment_response = sdk.payment().get(data["id"])
-#             pago_info = payment_response["response"]
-
-#             pedido_id = pago_info.get("external_reference")
-#             estado_pago = pago_info.get("status")  # approved, pending, rejected
-#             detalle_estado = pago_info.get("status_detail")
-
-#             # Buscamos el pedido en la DB
-#             pedido = Pedido.query.get(int(pedido_id)) if pedido_id else None
-#             if not pedido:
-#                 return jsonify({"error": "Pedido no encontrado"}), 404
-
-#             # Mapeamos estado de MP a estado de pedido
-#             if estado_pago == "approved":
-#                 pedido.estado = "APROBADO"
-#             elif estado_pago == "pending":
-#                 pedido.estado = "PENDIENTE"
-#             elif estado_pago == "rejected":
-#                 pedido.estado = "RECHAZADO"
-#             else:
-#                 pedido.estado = "DESCONOCIDO"
-
-#             db.session.commit()
-
-#             return jsonify({
-#                 "message": "Pedido actualizado",
-#                 "pedido_id": pedido.id,
-#                 "estado": pedido.estado,
-#                 "detalle_estado": detalle_estado
-#             }), 200
-
-#         return jsonify({"message": "Evento ignorado"}), 200
-
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-        

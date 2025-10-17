@@ -1,6 +1,6 @@
 import os
 from flask import Blueprint, json, request, jsonify
-from models import ImagenProducto, Producto, Categoria
+from models import ImagenProducto, Producto, Usuario
 from werkzeug.utils import secure_filename
 from database import db
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -86,6 +86,21 @@ def listar_productos():
         })
     except Exception as e:
         return jsonify({"msg": "Error al listar productos", "error": str(e)}), 500
+
+@productos_bp.route("/nombres", methods=["GET"])
+def listar_nombres_productos():
+    try:
+        productos = Producto.query.with_entities(Producto.id, Producto.nombre, Producto.categoria_id, Producto.url_imagen_principal).all()
+        return jsonify([
+            {
+                "id": p.id,
+                "nombre": fix_encoding(p.nombre),
+                "categoria_id": p.categoria_id,
+                "url_imagen_principal": p.url_imagen_principal
+            } for p in productos
+        ])
+    except Exception as e:
+        return jsonify({"msg": "Error al listar nombres de productos", "error": str(e)}), 500
 
 # Detalle de un producto
 @productos_bp.route("/<int:id>", methods=["GET"])
@@ -293,4 +308,31 @@ def reparar_json():
         "total_corregidos": len(rotos)
     })
 
+@productos_bp.route("/fav", methods=["GET"])
+@jwt_required()
+def obtener_favoritos():
+    user_id = get_jwt_identity()
+    user = Usuario.query.get(user_id)
+    if not user:
+        return jsonify({"error": "Usuario no encontrado"}), 404
 
+    favoritos = [
+        {
+            "producto_id": fav.producto_id,
+            
+        }
+        for fav in user.favoritos
+    ]
+    
+    productos_favoritos = []
+    for fav in favoritos:
+        producto = Producto.query.get(fav["producto_id"])
+        if producto:
+            productos_favoritos.append({
+                "id": producto.id,
+                "nombre": producto.nombre,
+                "precio": producto.precio,
+                "url_imagen_principal": producto.url_imagen_principal,
+            })
+
+    return jsonify({"favoritos": productos_favoritos}), 200

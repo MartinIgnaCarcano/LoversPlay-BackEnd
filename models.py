@@ -14,6 +14,7 @@ class Usuario(db.Model):
     pedidos = db.relationship("Pedido", backref="usuario", lazy=True)
     resenas = db.relationship("Resena", backref="usuario", lazy=True, cascade="all, delete-orphan")
     direcciones = db.relationship("Direccion", backref="usuario", lazy=True, cascade="all, delete-orphan")
+    favoritos = db.relationship("Favorito", backref="usuario", lazy=True, cascade="all, delete-orphan")
     # Guardar password en hash
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -33,6 +34,13 @@ class Direccion(db.Model):
     extra = db.Column(db.String(200))
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     departamento = db.Column(db.String(100)) # Opcional  
+
+class Favorito(db.Model):
+    __tablename__ = "favoritos"
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
+    producto_id = db.Column(db.Integer, db.ForeignKey("productos.id", ondelete="CASCADE"), nullable=False)
+    fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Categoria(db.Model):
     __tablename__ = "categorias"
@@ -65,7 +73,7 @@ class Producto(db.Model):
 class ImagenProducto(db.Model):
     __tablename__ = "imagenes_productos"
     id = db.Column(db.Integer, primary_key=True)
-    producto_id = db.Column(db.Integer, db.ForeignKey("productos.id"), nullable=False)
+    producto_id = db.Column(db.Integer, db.ForeignKey("productos.id", ondelete="CASCADE"), nullable=False)
     url_imagen = db.Column(db.String(200), nullable=False)
 
 class Pedido(db.Model):

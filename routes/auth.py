@@ -3,7 +3,7 @@ from flask_jwt_extended import (
     create_access_token, create_refresh_token,
     jwt_required, get_jwt_identity
 )
-from models import Usuario, Direccion
+from models import Usuario, Direccion, Favorito
 from database import db
 
 auth_bp = Blueprint("auth", __name__,url_prefix="/api/auth")
@@ -99,7 +99,6 @@ def actualizar_usuario():
 
     data = request.get_json() or {}
 
-    # Solo actualizamos los campos permitidos si vienen en la request
     if "nombre" in data:
         user.nombre = data["nombre"]
 
@@ -143,3 +142,28 @@ def actualizar_usuario():
 def protegido():
     usuario_id = get_jwt_identity()
     return jsonify({"mensaje": f"Acceso concedido al usuario {usuario_id}"})
+
+@auth_bp.route("/<int:id>", methods=["POST"])
+@jwt_required()
+def agregarFavorito(id):
+    current = get_jwt_identity()  # dict con {id, email, rol}
+    user = Usuario.query.get(current)
+
+    if not user:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+    
+    favorito = Favorito(
+        usuario_id=user.id,
+        producto_id=id
+    )
+    db.session.add(favorito)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Producto agregado a favoritos",
+        "favorito": {
+            "id": favorito.id,
+            "usuario_id": favorito.usuario_id,
+            "producto_id": favorito.producto_id
+        }
+    }), 200
