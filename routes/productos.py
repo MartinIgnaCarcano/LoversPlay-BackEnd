@@ -116,7 +116,7 @@ def detalle_producto(id):
             Producto.query
             .filter(Producto.categoria_id == p.categoria_id, Producto.id != p.id)
             .order_by(Producto.vistas.desc(), Producto.valoracion_promedio.desc())
-            .limit(3)  # Ej: máximo 3 sugeridos
+            .limit(4)  # Ej: máximo 3 sugeridos
             .all()
         )
 
@@ -308,31 +308,3 @@ def reparar_json():
         "total_corregidos": len(rotos)
     })
 
-@productos_bp.route("/fav", methods=["GET"])
-@jwt_required()
-def obtener_favoritos():
-    user_id = get_jwt_identity()
-    user = Usuario.query.get(user_id)
-    if not user:
-        return jsonify({"error": "Usuario no encontrado"}), 404
-
-    favoritos = [
-        {
-            "producto_id": fav.producto_id,
-            
-        }
-        for fav in user.favoritos
-    ]
-    
-    productos_favoritos = []
-    for fav in favoritos:
-        producto = Producto.query.get(fav["producto_id"])
-        if producto:
-            productos_favoritos.append({
-                "id": producto.id,
-                "nombre": producto.nombre,
-                "precio": producto.precio,
-                "url_imagen_principal": producto.url_imagen_principal,
-            })
-
-    return jsonify({"favoritos": productos_favoritos}), 200

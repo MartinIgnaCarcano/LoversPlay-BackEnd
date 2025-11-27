@@ -13,7 +13,7 @@ class Usuario(db.Model):
     rol = db.Column(db.String(20), default="cliente")  # cliente, admin
     pedidos = db.relationship("Pedido", backref="usuario", lazy=True)
     resenas = db.relationship("Resena", backref="usuario", lazy=True, cascade="all, delete-orphan")
-    direcciones = db.relationship("Direccion", backref="usuario", lazy=True, cascade="all, delete-orphan")
+    direccion = db.relationship("Direccion",backref="usuario",uselist=False,cascade="all, delete-orphan")
     favoritos = db.relationship("Favorito", backref="usuario", lazy=True, cascade="all, delete-orphan")
     # Guardar password en hash
     def set_password(self, password):
@@ -26,7 +26,7 @@ class Usuario(db.Model):
 class Direccion(db.Model):
     __tablename__ = "direcciones"
     id = db.Column(db.Integer, primary_key=True)
-    usuario_id = db.Column(db.Integer, db.ForeignKey("usuarios.id"), nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey("usuarios.id"), nullable=False, unique=True)
     calle = db.Column(db.String(150), nullable=False)
     provincia = db.Column(db.String(100), nullable=False)
     codigo_postal = db.Column(db.String(20), nullable=False)
@@ -41,6 +41,8 @@ class Favorito(db.Model):
     usuario_id = db.Column(db.Integer, db.ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
     producto_id = db.Column(db.Integer, db.ForeignKey("productos.id", ondelete="CASCADE"), nullable=False)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    producto = db.relationship("Producto", backref="favoritos", lazy=True)
 
 class Categoria(db.Model):
     __tablename__ = "categorias"
@@ -83,6 +85,7 @@ class Pedido(db.Model):
     estado = db.Column(db.String(50), default="pendiente")
     usuario_id = db.Column(db.Integer, db.ForeignKey("usuarios.id"), nullable=False)
     total = db.Column(db.Float, default=0)
+    costo_envio = db.Column(db.Float, default=0)
 
     detalles = db.relationship("PedidoDetalle", backref="pedido", lazy=True, passive_deletes=True)
 
@@ -126,7 +129,6 @@ class Pago(db.Model):
     pedido = db.relationship("Pedido", backref="pagos", lazy=True)
 
 
-
 class Resena(db.Model):
     __tablename__ = "resenas"
     id = db.Column(db.Integer, primary_key=True)
@@ -136,4 +138,26 @@ class Resena(db.Model):
     comentario = db.Column(db.Text)
     fecha = db.Column(db.DateTime, default=datetime.utcnow)    
 
+class ZonaEnvio(db.Model):
+    __tablename__ = "zonas_envio"
 
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(100), nullable=False) 
+    cp_inicio = db.Column(db.Integer, nullable=False)
+    cp_fin = db.Column(db.Integer, nullable=False)
+
+    tipo_envio = db.Column(db.String(50), nullable=False)  # correo | viacargo | andesmar | cata
+    precio = db.Column(db.Float, nullable=False)
+
+    activa = db.Column(db.Boolean, default=True)
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "nombre": self.nombre,
+            "cp_inicio": self.cp_inicio,
+            "cp_fin": self.cp_fin,
+            "tipo_envio": self.tipo_envio,
+            "precio": self.precio,
+            "activa": self.activa
+        }

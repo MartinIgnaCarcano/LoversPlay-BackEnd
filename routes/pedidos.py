@@ -2,86 +2,26 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import Pedido, PedidoDetalle, Producto, Usuario
 from database import db
-import mercadopago
 
 pedidos_bp = Blueprint("pedidos", __name__,url_prefix="/api/pedidos")
-sdk = mercadopago.SDK("APP_USR-4359190007341448-101608-cf1c6122b82c02e35a1c9d3f28adef05-2611950632")
-
-
-@pedidos_bp.route("/pruebas", methods=["POST"])
-def pruebas():
-    data = request.get_json() or {}
-    if(data.get("metodo") != "credito"):
-        print("excluyendo debito")
-        excluidos = [
-            { "id": "cabal" },
-            { "id": "amex" },
-            { "id": "diners" },
-            { "id": "visa" },
-            { "id": "master" },
-            { "id": "naranja" },
-            { "id": "argencard" }
-        ]
-    else:
-        excluidos = []
-        
-    preference_data = {
-        
-        "items": [
-            {
-                "title": "Mi producto",
-                "quantity": 1,
-                "unit_price": 75.76,
-                "currency_id": "ARS"
-            }
-        ],
-        "back_urls": {
-            "success": "https://www.tu-sitio.com/success",
-            "failure": "https://www.tu-sitio.com/failure",
-            "pending": "https://www.tu-sitio.com/pending"
-        },
-        "auto_return": "approved",
-        "notification_url": "https://mckenzie-burthensome-denita.ngrok-free.dev/api/pedidos/notificacion"
-    }
-
-    preference_response = sdk.preference().create(preference_data)
-    preference = preference_response["response"]
-
-    return jsonify({
-        "message": "Preferencia creada correctamente",
-        "id": preference.get("id"),
-        "init_point": preference.get("init_point"),
-        "sandbox_init_point": preference.get("sandbox_init_point")
-    }), 201
-
-@pedidos_bp.route("/notificacion", methods=["POST"])
-def notificacion_mp():
-    print("Notificación recibida de Mercado Pago")
-    print(request.json)
-    return jsonify({"message": "Notificación recibida"}), 200
-
-
-
-
-
-
-
-
 
 # Listar pedidos del usuario logueado
 @pedidos_bp.route("/", methods=["GET"], strict_slashes=False)
 @jwt_required()
 def listar_pedidos():
     try:
-        if usuario_id := get_jwt_identity() is None:
-            return jsonify({"error": "Usuario no autenticado"}), 401
         usuario_id = get_jwt_identity()
+        
+        if usuario_id is None:
+            return jsonify({"error": "Usuario no autenticado"}), 401
+        
         pedidos = Pedido.query.filter_by(usuario_id=usuario_id).all()
         return jsonify([
             {
                 "id": p.id,
                 "estado": p.estado,
                 "total": p.total,
+                "costo_envio": p.costo_envio,
                 "fecha": p.fecha.isoformat(),
                 "detalles": [
                     {
@@ -106,12 +46,12 @@ def detalle_pedido(id):
         "id": pedido.id,
         "estado": pedido.estado,
         "total": pedido.total,
-        "fecha_creacion": pedido.fecha_creacion.isoformat(),
+        "costo_envio": pedido.costo_envio,
+        "fecha": pedido.fecha.isoformat(),
         "detalles": [
             {
                 "producto": i.producto.nombre,
                 "cantidad": i.cantidad,
-                "precio_unitario": i.precio_unitario,
                 "subtotal": i.subtotal
             } for i in pedido.detalles
         ]
@@ -155,31 +95,68 @@ def eliminar_pedido(id):
 
 # Crear un pedido manual (sin mp por el momento)
 @pedidos_bp.route("/", methods=["POST"])
-@jwt_required()
-def crear_pedido_con_pago():
+def crear_pedido():
     try:
         data = request.get_json()
-        usuario_id = get_jwt_identity()
         detalles = data.get("detalles", [])
 
-        if not usuario_id or not detalles:
-            return jsonify({"error": "Faltan datos (usuario_id o detalles)"}), 400
+        if not detalles:
+            return jsonify({"error": "Faltan detalles del pedido"}), 400
 
-        # Calcular total y armar detalle
+        # ================================================================
+        # 1) Intentar obtener usuario LOGEADO
+        # ================================================================
+        usuario_id = None
+        try:
+            usuario_id = get_jwt_identity()
+        except:
+            pass  # si no hay token, get_jwt_identity() levanta error silencioso
+
+        # ================================================================
+        # 2) Si NO está logeado → buscar o crear usuario invitado
+        # ================================================================
+        if not usuario_id:
+            email = data.get("email")
+            nombre = data.get("nombre", "Invitado")
+            telefono = data.get("telefono")
+
+            if not email:
+                return jsonify({"error": "Para pedidos sin registrarse, se requiere email"}), 400
+
+            # Buscar si ya existe ese email
+            usuario = Usuario.query.filter_by(email=email).first()
+
+            # Crear invitado si no existe
+            if not usuario:
+                usuario = Usuario(
+                    nombre=nombre,
+                    email=email,
+                    telefono=telefono,
+                    rol="guest",
+                    password_hash=""   # sin contraseña
+                )
+                db.session.add(usuario)
+                db.session.commit()
+
+            usuario_id = usuario.id
+        
+        # ================================================================
+        # 3) Crear pedido normal
+        # ================================================================
         total = 0
         detalles_pedido = []
-        # items_mp = []
 
         for item in detalles:
             producto = Producto.query.get(item["producto_id"])
             if not producto:
-                return jsonify({"error": f"Producto id {item['producto_id']} no encontrado"}), 404
+                return jsonify({"error": f"Producto {item['producto_id']} no encontrado"}), 404
 
-            if item.get("cantidad") > producto.stock:
-                return jsonify({"error": f"Stock insuficiente para producto id {item['producto_id']}"}), 400
-            
-            producto.stock -= item.get("cantidad", 1)  # Reducir stock
             cantidad = item.get("cantidad", 1)
+
+            if cantidad > producto.stock:
+                return jsonify({"error": f"Stock insuficiente para {producto.nombre}"}), 400
+            
+            producto.stock -= cantidad
             subtotal = producto.precio * cantidad
             total += subtotal
 
@@ -190,54 +167,31 @@ def crear_pedido_con_pago():
                     subtotal=subtotal
                 )
             )
+            
+        #Sumamos el envio al costo total del pedido
+        costo_envio = data.get("costo_envio", 0)
+        total_final = total + costo_envio
+        
+        pedido = Pedido(
+            usuario_id=usuario_id,
+            total=total_final,
+            costo_envio=costo_envio,
+            estado="PENDIENTE",
+            detalles=detalles_pedido
+        )
 
-            # # Armar ítem para Mercado Pago
-            # items_mp.append({
-            #     "id": str(producto.id),
-            #     "title": producto.nombre,
-            #     "quantity": cantidad,
-            #     "unit_price": float(producto.precio),
-            #     "currency_id": "ARS"
-            # })
-
-        # Crear pedido en estado PENDIENTE
-        pedido = Pedido(usuario_id=usuario_id, total=total, estado="PENDIENTE", detalles=detalles_pedido)
         db.session.add(pedido)
-        db.session.commit()  # para tener el pedido_id generado
+        db.session.commit()
 
-        # # Crear preferencia en Mercado Pago
-        # preference_data = {
-        #     "items": items_mp,
-        #     "back_urls": {
-        #         "success": f"http://localhost:3000/pagos/success",
-        #         "failure": f"http://localhost:3000/pagos/failure",
-        #         "pending": f"http://localhost:3000/pagos/pending"
-        #     },
-        #     "auto_return": None,
-        #     "external_reference": str(pedido.id),
-        #     "notification_url": "http://localhost:5000/api/pagos/notificacion"
-        # }
-
-        # preference_response = sdk.preference().create(preference_data)
-        # print(preference_response)
-        # preference = preference_response["response"]
-
-        # return jsonify({
-        #     "pedido_id": pedido.id,
-        #     "total": total,
-        #     "estado": pedido.estado,
-        #     "init_point": preference["init_point"],
-        #     "sandbox_init_point": preference["sandbox_init_point"]
-        # }), 201
         return jsonify({
             "pedido_id": pedido.id,
             "total": total,
-            "estado": pedido.estado
+            "estado": pedido.estado,
+            "usuario_id": usuario_id
         }), 201
 
     except Exception as e:
-        print(str(e))
+        print("ERROR:", e)
         return jsonify({"error": str(e)}), 500
-
 
 
