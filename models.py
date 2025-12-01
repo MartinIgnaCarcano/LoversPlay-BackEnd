@@ -106,7 +106,7 @@ class Pago(db.Model):
     pedido_id = db.Column(db.Integer, db.ForeignKey("pedidos.id"), nullable=False)
 
     # Datos de preferencia de Mercado Pago
-    id_preferencia = db.Column(db.String(100), nullable=False, unique=True)
+    id_preferencia = db.Column(db.String(100), nullable=True)
     url_checkout = db.Column(db.String(300), nullable=True)  # init_point para redirigir al checkout
     referencia_externa = db.Column(db.String(100), nullable=True)  # tu referencia interna (ej: número de pedido)
 

@@ -6,18 +6,12 @@ from models import Pedido, Pago
 import requests
 
 pagos_bp = Blueprint("pagos", __name__, url_prefix="/api/pagos")
-sdk = mercadopago.SDK("APP_USR-4359190007341448-101608-cf1c6122b82c02e35a1c9d3f28adef05-2611950632")
+sdk = mercadopago.SDK("APP_USR-8996751005930022-112715-9268db70d5e2dc631505b74a818b8481-2611950632")
 
 @pagos_bp.route("/webhook", methods=["POST"])
 def webhook_mp():
-    """
-    Recibe notificaciones de Mercado Pago y actualiza el pedido.
-    MP envía: { "type": "payment", "data": { "id": "123456" } }
-    """
     try:
         data = request.get_json()
-        print("=== WEBHOOK RECIBIDO ===")
-        print(data)
 
         tipo = data.get("type")
         if tipo != "payment":
@@ -31,8 +25,6 @@ def webhook_mp():
         pago_info = sdk.payment().get(payment_id)
         pago = pago_info["response"]
 
-        print("=== DATOS DE PAGO MP ===")
-        print(pago)
 
         estado = pago.get("status")           # approved / pending / rejected
         detalle_estado = pago.get("status_detail")
@@ -64,8 +56,8 @@ def webhook_mp():
         if not pago_reg:
             pago_reg = Pago(
                 pedido_id=pedido_id,
-                id_preferencia="",
-                url_checkout="",
+                id_preferencia=None,
+                url_checkout=None,
                 referencia_externa=str(pedido_id),
                 id_pago_mp=str(payment_id),
                 id_orden_mercante=str(orden_mercante),
@@ -111,7 +103,7 @@ def crear_preferencia_pago():
         pedido_id = data.get("pedido_id")
         items = data.get("items")
         costo_envio = data.get("costo_envio", 0)
-        tipo_pago = data.get("tipo_pago")  # debito | credito | dinero_cuenta | transferencia
+        tipo_pago = data.get("tipo_pago")  # debito | credito | mercadopago | transferencia
 
         if not pedido_id or not items or not tipo_pago:
             return jsonify({"error": "Faltan datos para crear la preferencia"}), 400
@@ -200,7 +192,7 @@ def crear_preferencia_pago():
             preference_data["payment_methods"] = payment_rules
         
         
-        MP_ACCESS_TOKEN = "APP_USR-4359190007341448-101608-cf1c6122b82c02e35a1c9d3f28adef05-2611950632"
+        MP_ACCESS_TOKEN = "APP_USR-8996751005930022-112715-9268db70d5e2dc631505b74a818b8481-2611950632"
 
         res = requests.post(
             "https://api.mercadopago.com/checkout/preferences",
@@ -273,7 +265,7 @@ def build_payment_restrictions(tipo_pago):
         ]
         return rules
 
-    if tipo_pago == "dinero_cuenta":
+    if tipo_pago == "mercadopago":
         rules["excluded_payment_types"] = [
             {"id": "credit_card"},
             {"id": "debit_card"},
