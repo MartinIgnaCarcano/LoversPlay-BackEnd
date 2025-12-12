@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import Pedido, PedidoDetalle, Producto, Usuario
 from database import db
+from sqlalchemy import desc
 
 pedidos_bp = Blueprint("pedidos", __name__,url_prefix="/api/pedidos")
 
@@ -34,6 +35,53 @@ def listar_pedidos():
         ])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# Listar pedidos del usuario logueado
+@pedidos_bp.route("/listar", methods=["GET"])
+@jwt_required()
+def listar_todos_pedidos():
+    try:
+        page = int(request.args.get("page", 1))       # Página actual (default 1)
+        per_page = int(request.args.get("per_page", 10))  # Productos por página (default 10)
+        
+        offset_value = (page - 1) * per_page
+
+        pedidos = (
+            Pedido.query
+            .order_by(desc(Pedido.fecha))
+            .limit(per_page)
+            .offset(offset_value)
+            .all()
+        )
+        total = Pedido.query.count()
+        
+        return jsonify(
+            {
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "pedidos": [
+                    {
+                        "id": p.id,
+                        "estado": p.estado,
+                        "total": p.total,
+                        "costo_envio": p.costo_envio,
+                        "fecha": p.fecha.isoformat(),
+                        "detalles": [
+                            {
+                                "producto": i.producto.nombre,
+                                "cantidad": i.cantidad,
+                                "subtotal": i.subtotal
+                            } for i in p.detalles
+                            ]
+                    }for p in pedidos
+                ]
+            } 
+                
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 # Ver detalle de un pedido
 @pedidos_bp.route("/unico/<int:id>", methods=["GET"])

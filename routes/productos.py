@@ -254,13 +254,16 @@ def crear_producto():
 
 # Actualizar producto (ADMIN)
 @productos_bp.route("/<int:id>", methods=["PATCH"])
+@jwt_required()
 def actualizar_producto(id):
     producto = Producto.query.get_or_404(id)
     data = request.get_json() or {}
     if "nombre" in data:
         producto.nombre = data["nombre"]
-    if "descripcion" in data:
-        producto.descripcion = data["descripcion"]
+    if "descripcion_corta" in data:
+        producto.descripcion_corta = data["descripcion_corta"]
+    if "descripcion_larga" in data:
+        producto.descripcion_larga = data["descripcion_larga"]
     if "precio" in data:
         producto.precio = data["precio"]
     if "stock" in data:
@@ -278,6 +281,70 @@ def eliminar_producto(id):
     db.session.delete(producto)
     db.session.commit()
     return jsonify({"message": "Producto eliminado"}), 200
+
+@productos_bp.route("/filtro", methods=["GET"])
+def buscar_por_nombre():
+    try:
+        page = int(request.args.get("page", 1))
+        per_page = int(request.args.get("per_page", 10))
+        filtro = request.args.get("filtro", "")
+        categoria_id = request.args.get("id", None)
+
+        offset_value = (page - 1) * per_page
+
+        # Base query
+        query = Producto.query
+
+        # -----------------------------
+        # APLICAR FILTRO POR NOMBRE
+        # -----------------------------
+        if filtro:
+            query = query.filter(
+                Producto.nombre.ilike(f"%{filtro}%")
+            )
+
+        # -----------------------------
+        # APLICAR FILTRO POR CATEGORIA
+        # -----------------------------
+        if categoria_id:
+            query = query.filter(
+                Producto.categoria_id == categoria_id
+            )
+
+        # TOTAL PARA PAGINACIÓN
+        total = query.count()
+
+        # ORDEN + PAGINADO
+        productos = (
+            query
+            .order_by(desc(Producto.vistas * 0.7 + Producto.valoracion_promedio * 0.3))
+            .limit(per_page)
+            .offset(offset_value)
+            .all()
+        )
+
+        return jsonify({
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "productos": [
+                {
+                    "id": p.id,
+                    "nombre": p.nombre,
+                    "precio": p.precio,
+                    "url_imagen_principal": p.url_imagen_principal,
+                    "url_imagen_secundaria": p.imagenes[0].url_imagen if p.imagenes else None,
+                    "stock": p.stock,
+                    "vistas": p.vistas,
+                    "valoracion_promedio": p.valoracion_promedio,
+                }
+                for p in productos
+            ]
+        })
+
+    except Exception as e:
+        return jsonify({"msg": "Error al listar productos", "error": str(e)}), 500
+
 
 
 from sqlalchemy import text

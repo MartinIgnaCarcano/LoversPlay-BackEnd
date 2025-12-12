@@ -16,14 +16,14 @@ app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = "cambia-esto-por-un-secreto-seguro"  # usa variable de entorno en prod
 print("SECRET:", app.config['JWT_SECRET_KEY'])
 
-CORS(app, supports_credentials=True, origins=["http://192.168.100.219:3000", "*"])
+CORS(app, supports_credentials=True, origins=["http://localhost:3000", "*"])
 
 
 # Configuración de SQLite
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///ecommerce.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(seconds=3600)  # expira en 1 hora
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(seconds=86400)  # expira en 1 hora
 
 db.init_app(app)
 jwt = JWTManager(app)

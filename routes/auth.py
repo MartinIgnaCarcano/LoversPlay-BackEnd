@@ -64,10 +64,7 @@ def login():
         "nombre": user.nombre
     }), 200
 
-
-# -----------------------------------
-# ME (obtener datos del usuario)
-# -----------------------------------
+#Me
 @auth_bp.route("/me", methods=["GET"])
 @jwt_required()
 def obtener_usuario():
@@ -97,11 +94,8 @@ def obtener_usuario():
         "favoritos": [f.producto_id for f in user.favoritos]
         
     }), 200
-
-
-# -----------------------------------
+    
 # UPDATE USER + ADDRESS
-# -----------------------------------
 @auth_bp.route("/me", methods=["PATCH"])
 @jwt_required()
 def actualizar_usuario():
@@ -210,7 +204,6 @@ def obtener_favoritos_completos():
 
     return jsonify(productos), 200
 
-
 @auth_bp.route("/deletefav/<int:id>", methods=["DELETE"])
 @jwt_required()
 def eliminar_favorito(id):
@@ -230,4 +223,163 @@ def eliminar_favorito(id):
         return jsonify({
             "message": "Error al eliminar favorito"
         }), 500
-    
+
+# -----------------------------------
+# CRUD
+# -----------------------------------
+
+#Listar usuarios
+@auth_bp.route("/listar", methods=["GET"])
+@jwt_required()
+def listar_usuarios():
+    try:
+        # Paginación
+        page = int(request.args.get("page", 1))
+        per_page = int(request.args.get("per_page", 10))
+
+        offset_value = (page - 1) * per_page
+
+        # Query principal
+        query = Usuario.query
+
+        # Cantidad total para paginación
+        total = query.count()
+
+        # Obtener la página actual
+        usuarios = (
+            query
+            .order_by(Usuario.id.asc())
+            .limit(per_page)
+            .offset(offset_value)
+            .all()
+        )
+
+        # Serialización
+        data = []
+        for user in usuarios:
+            direccion = user.direccion
+            data.append({
+                "id": user.id,
+                "nombre": user.nombre,
+                "email": user.email,
+                "telefono": user.telefono,
+                "rol": user.rol,
+                "fecha_registro": user.fecha_registro.isoformat() if user.fecha_registro else None,
+                "activo": user.activo,
+                "direccion": {
+                    "id": direccion.id,
+                    "calle": direccion.calle,
+                    "provincia": direccion.provincia,
+                    "departamento": direccion.departamento,
+                    "codigo_postal": direccion.codigo_postal,
+                    "pais": direccion.pais,
+                    "extra": direccion.extra
+                } if direccion else None
+            })
+
+        return jsonify({
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": (total + per_page - 1) // per_page,
+            "usuarios": data
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": "Error al obtener usuarios", "detalle": str(e)}), 500
+
+@auth_bp.route("/<int:id>", methods=["GET"])
+@jwt_required()
+def obtener_usuario_admin(id):
+    user = Usuario.query.get(id)
+
+    if not user:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    direccion = user.direccion  # SE CAMBIA A UNO A UNO
+
+    return jsonify({
+        "id": user.id,
+        "nombre": user.nombre,
+        "email": user.email,
+        "telefono": user.telefono,
+        "rol": user.rol,
+        "fecha_registro": user.fecha_registro.isoformat(),
+        "direccion": {
+            "id": direccion.id,
+            "calle": direccion.calle,
+            "provincia": direccion.provincia,
+            "departamento": direccion.departamento,
+            "codigo_postal": direccion.codigo_postal,
+            "pais": direccion.pais,
+            "extra": direccion.extra
+        } if direccion else None,
+        "favoritos": [f.producto_id for f in user.favoritos]
+        
+    }), 200
+
+@auth_bp.route("/<int:id>", methods=["PATCH"])
+@jwt_required()
+def actualizar_usuario_admin(id):
+    user = Usuario.query.get(id)
+
+    if not user:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    data = request.get_json() or {}
+
+    # ----------- UPDATE USER -----------
+    if "nombre" in data:
+        user.nombre = data["nombre"]
+
+    if "telefono" in data:
+        user.telefono = data["telefono"]
+
+    if "email" in data:
+        if Usuario.query.filter(Usuario.email == data["email"], Usuario.id != user.id).first():
+            return jsonify({"error": "Ese email ya está en uso por otro usuario"}), 400
+        user.email = data["email"]
+
+    if "password" in data:
+        user.set_password(data["password"])
+
+    # ----------- UPDATE OR CREATE ADDRESS -----------
+    if "direccion" in data:
+        d = data["direccion"]
+
+        # Ver si ya tiene 1 dirección
+        if user.direccion:
+            user.direccion.calle = d.get("calle", user.direccion.calle)
+            user.direccion.provincia = d.get("provincia", user.direccion.provincia)
+            user.direccion.codigo_postal = d.get("codigo_postal", user.direccion.codigo_postal)
+            user.direccion.pais = d.get("pais", user.direccion.pais)
+            user.direccion.extra = d.get("extra", user.direccion.extra)
+            user.direccion.departamento = d.get("departamento", user.direccion.departamento)
+        else:
+            nueva = Direccion(
+                usuario_id=user.id,
+                calle=d.get("calle"),
+                provincia=d.get("provincia"),
+                codigo_postal=d.get("codigo_postal"),
+                pais=d.get("pais"),
+                extra=d.get("extra"),
+                departamento=d.get("departamento")
+            )
+            db.session.add(nueva)
+
+    db.session.commit()
+
+    return jsonify({"message": "Usuario actualizado con éxito"}), 200
+
+@auth_bp.route("/<int:id>", methods=["DELETE"])
+@jwt_required()
+def eliminar_usuario(id):
+    user = Usuario.query.get(id)
+    if not user:
+        return jsonify({"error": "Usuario no encontrado"}),404
+    user.activo = False
+    db.session.add(user)
+    db.session.commit()
+    return jsonify({
+        "msg":"Usuario eliminado correctamente"
+    })    

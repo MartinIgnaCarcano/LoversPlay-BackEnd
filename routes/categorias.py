@@ -1,6 +1,7 @@
 import os
 from flask import Blueprint, request, jsonify, current_app
 from werkzeug.utils import secure_filename
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, Categoria, Producto
 from sqlalchemy import func
 
@@ -17,12 +18,16 @@ def nombreArchivoFinal(filename, nombre, id):
 
 # Crear categoría
 @categorias_bp.route("/", methods=["POST"])
+@jwt_required()
 def crear_categoria():
     nombre = request.form.get("nombre")
+    slug = request.form.get("slug")
     if not nombre:
         return jsonify({"msg": "Falta nombre"}), 400
-
-    categoria = Categoria(nombre=nombre)
+    if not slug:
+        return jsonify({"msg": "Falta el slug"}),400
+    
+    categoria = Categoria(nombre=nombre, slug=slug)
     
     db.session.add(categoria)
     db.session.flush()  
@@ -73,6 +78,7 @@ def detalle_categoria(id):
 
 # Actualizar categoría
 @categorias_bp.route("/<int:id>", methods=["PUT", "PATCH"])
+@jwt_required()
 def actualizar_categoria(id):
     c = Categoria.query.get_or_404(id)
     nombre = request.form.get("nombre")
@@ -92,6 +98,7 @@ def actualizar_categoria(id):
 
 #Eliminar categoría
 @categorias_bp.route("/<int:id>", methods=["DELETE"])
+@jwt_required()
 def eliminar_categoria(id):
     c = Categoria.query.get_or_404(id)
     

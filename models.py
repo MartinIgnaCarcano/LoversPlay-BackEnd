@@ -11,6 +11,7 @@ class Usuario(db.Model):
     fecha_registro = db.Column(db.DateTime, default=datetime.utcnow)
     telefono = db.Column(db.String(20))
     rol = db.Column(db.String(20), default="cliente")  # cliente, admin
+    activo = db.Column(db.Boolean, default=True)
     pedidos = db.relationship("Pedido", backref="usuario", lazy=True)
     resenas = db.relationship("Resena", backref="usuario", lazy=True, cascade="all, delete-orphan")
     direccion = db.relationship("Direccion",backref="usuario",uselist=False,cascade="all, delete-orphan")
