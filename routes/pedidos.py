@@ -233,7 +233,7 @@ def crear_pedido():
 
         return jsonify({
             "pedido_id": pedido.id,
-            "total": total,
+            "total": total_final,
             "estado": pedido.estado,
             "usuario_id": usuario_id
         }), 201

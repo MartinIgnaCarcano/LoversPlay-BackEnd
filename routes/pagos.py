@@ -112,22 +112,33 @@ def crear_preferencia_pago():
         # 0) Si el pago es por transferencia → NO usar Mercado Pago
         # =====================================================
         if tipo_pago == "transferencia":
+            pedido = Pedido.query.get(pedido_id)
+            if not pedido:
+                return jsonify({"error": "Pedido no encontrado"}), 404
             pago = Pago(
                 pedido_id=pedido_id,
-                id_preferencia=None,
-                url_checkout=None,
                 referencia_externa=str(pedido_id),
                 estado="pendiente",
+                detalle_estado="awaiting_transfer",
                 metodo_pago="transferencia",
                 tipo_pago="bank_transfer",
-                monto=sum(i["precio"] * i["cantidad"] for i in items) + costo_envio
+                monto=pedido.total,
             )
             db.session.add(pago)
             db.session.commit()
 
             return jsonify({
-                "mensaje": "Pago por transferencia registrado como pendiente",
-                "pedido_id": pedido_id
+                "mensaje": "Transferencia registrada",
+                "pedido_id": pedido_id,
+                "monto": pedido.total,
+                "referencia": str(pedido_id),
+                "instrucciones": {
+                    "alias": "TU_ALIAS",
+                    "cbu": "TU_CBU",
+                    "titular": "TU_TITULAR",
+                    "cuit": "TU_CUIT",
+                    "concepto": f"PEDIDO {pedido_id}"
+                }
             }), 201
 
         # =====================================================

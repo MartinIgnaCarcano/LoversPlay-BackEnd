@@ -126,6 +126,11 @@ class Pago(db.Model):
 
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # ====== Para no mandar mails duplicados ======
+    notificado_user = db.Column(db.Boolean, default=False)
+    notificado_admin = db.Column(db.Boolean, default=False)
+    ultimo_estado_notificado = db.Column(db.String(50), nullable=True)
 
     pedido = db.relationship("Pedido", backref="pagos", lazy=True)
 
