@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import Pedido, PedidoDetalle, Producto, Usuario
+from models import Pedido, PedidoDetalle, Producto, Usuario, Pago
 from database import db
 from sqlalchemy import desc
 
@@ -24,6 +24,10 @@ def listar_pedidos():
                 "total": p.total,
                 "costo_envio": p.costo_envio,
                 "fecha": p.fecha.isoformat(),
+                "estado_pago":(Pago.query
+                                .filter_by(pedido_id=p.id)
+                                .order_by(Pago.fecha_creacion.desc())
+                                .first()).estado,
                 "detalles": [
                     {
                         "producto": i.producto.nombre,
@@ -89,13 +93,18 @@ def detalle_pedido(id):
     pedido = Pedido.query.get(id)
     if not pedido:
         return jsonify({"error": "Pedido no encontrado"}), 404
-
+    pago = (Pago.query
+        .filter_by(pedido_id=pedido.id)
+        .order_by(Pago.fecha_creacion.desc())
+        .first())
+    
     return jsonify({
         "id": pedido.id,
         "estado": pedido.estado,
         "total": pedido.total,
         "costo_envio": pedido.costo_envio,
         "fecha": pedido.fecha.isoformat(),
+        "estado_pago":pago.estado,
         "detalles": [
             {
                 "producto": i.producto.nombre,

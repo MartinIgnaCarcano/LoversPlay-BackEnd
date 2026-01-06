@@ -8,92 +8,73 @@ import requests
 pagos_bp = Blueprint("pagos", __name__, url_prefix="/api/pagos")
 sdk = mercadopago.SDK("APP_USR-8996751005930022-112715-9268db70d5e2dc631505b74a818b8481-2611950632")
 
-@pagos_bp.route("/webhook", methods=["POST"])
+@pagos_bp.route("/webhook", methods=["POST", "GET"])
 def webhook_mp():
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
 
-        tipo = data.get("type")
-        if tipo != "payment":
+        # soporta payment.created / payment.updated y también "payment"
+        event_type = data.get("type")
+        action = data.get("action")
+
+        payment_id = None
+        if isinstance(data.get("data"), dict):
+            payment_id = data["data"].get("id")
+
+        # logs para ver qué llega
+        print("MP WEBHOOK:", {"action": action, "type": event_type, "payment_id": payment_id})
+
+        if event_type != "payment" or not payment_id:
             return jsonify({"status": "ignored"}), 200
 
-        payment_id = data["data"]["id"]
-
-        # =====================================================
-        # 1) Consultar API de Mercado Pago para obtener datos reales
-        # =====================================================
         pago_info = sdk.payment().get(payment_id)
-        pago = pago_info["response"]
+        pago = (pago_info or {}).get("response") or {}
+        if not pago:
+            print("MP SDK sin response:", pago_info)
+            return jsonify({"status": "no_response"}), 200
 
-
-        estado = pago.get("status")           # approved / pending / rejected
-        detalle_estado = pago.get("status_detail")
-        monto = pago.get("transaction_amount")
-        metodo = pago.get("payment_method", {}).get("id")
-        tipo_pago = pago.get("payment_type_id")
-        orden_mercante = pago.get("order", {}).get("id")
         referencia = pago.get("external_reference")
-
         if not referencia:
-            print("SIN referencia externa. Ignorando...")
-            return jsonify({"status": "no external_reference"}), 200
+            return jsonify({"status": "no_external_reference"}), 200
 
-        pedido_id = int(referencia)
-
-        # =====================================================
-        # 2) Buscar Pedido en BD
-        # =====================================================
-        pedido = Pedido.query.get(pedido_id)
-        if not pedido:
-            print("PEDIDO NO ENCONTRADO")
-            return jsonify({"error": "Pedido no encontrado"}), 404
-
-        # =====================================================
-        # 3) Crear o actualizar Pago en tu BD
-        # =====================================================
-        pago_reg = Pago.query.filter_by(id_pago_mp=str(payment_id)).first()
-
+        pago_reg = Pago.query.get(int(referencia))
         if not pago_reg:
-            pago_reg = Pago(
-                pedido_id=pedido_id,
-                id_preferencia=None,
-                url_checkout=None,
-                referencia_externa=str(pedido_id),
-                id_pago_mp=str(payment_id),
-                id_orden_mercante=str(orden_mercante),
-                estado=estado,
-                detalle_estado=detalle_estado,
-                metodo_pago=metodo,
-                tipo_pago=tipo_pago,
-                monto=monto,
-            )
-            db.session.add(pago_reg)
-        else:
-            # Actualizar
-            pago_reg.estado = estado
-            pago_reg.detalle_estado = detalle_estado
-            pago_reg.metodo_pago = metodo
-            pago_reg.tipo_pago = tipo_pago
-            pago_reg.monto = monto
+            return jsonify({"status": "pago_not_found"}), 200
 
-        # =====================================================
-        # 4) Actualizar estado del Pedido
-        # =====================================================
+        # idempotencia
+        if pago_reg.id_pago_mp == str(payment_id):
+            return jsonify({"status": "ok"}), 200
+
+        pedido = Pedido.query.get(pago_reg.pedido_id)
+        if not pedido:
+            return jsonify({"status": "pedido_not_found"}), 200
+
+        estado = pago.get("status")
+        pago_reg.id_pago_mp = str(payment_id)
+        pago_reg.estado = estado
+        pago_reg.detalle_estado = pago.get("status_detail")
+        pago_reg.monto = pago.get("transaction_amount")
+        pago_reg.metodo_pago = (pago.get("payment_method") or {}).get("id")
+        pago_reg.tipo_pago = pago.get("payment_type_id")
+        pago_reg.id_orden_mercante = str((pago.get("order") or {}).get("id"))
+
         if estado == "approved":
             pedido.estado = "PAGADO"
-        elif estado == "pending":
+        elif estado in ("pending", "in_process", "in_mediation"):
             pedido.estado = "PENDIENTE"
-        else:
+        elif estado == "rejected":
             pedido.estado = "RECHAZADO"
+        else:
+            pedido.estado = "PENDIENTE"
 
         db.session.commit()
-
-        print("=== PEDIDO ACTUALIZADO CORRECTAMENTE ===")
         return jsonify({"status": "ok"}), 200
 
     except Exception as e:
-        print("ERROR WEBHOOK:", e)
-        return jsonify({"error": str(e)}), 500
+        # IMPORTANTÍSIMO: no tires 500 si querés evitar reintentos infinitos por algo que es tu bug
+        print("ERROR WEBHOOK:", repr(e))
+        return jsonify({"status": "error_logged"}), 200
+
 
 @pagos_bp.route("/preferencia", methods=["POST"])
 def crear_preferencia_pago():
@@ -184,67 +165,75 @@ def crear_preferencia_pago():
         payment_rules = build_payment_restrictions(tipo_pago)
 
         # =====================================================
-        # 4) Crear preferencia
+        # 4) Guardar pago
+        # =====================================================
+        pago_mp = Pago(
+            pedido_id=pedido_id,
+            id_preferencia=None,
+            url_checkout=None,
+            referencia_externa=None, 
+            estado="pendiente",
+            metodo_pago=tipo_pago,
+            monto=total
+        )
+
+        db.session.add(pago_mp)
+        db.session.commit()
+        
+        # =====================================================
+        # 5) Crear preferencia
         # =====================================================
         preference_data = {
             "items": mp_items,
-            "external_reference": str(pedido_id),
+            "external_reference": str(pago_mp.id), 
             "back_urls": {
-                "success": "https://loversplay-six.vercel.app/pagos/success",
-                "failure": "https://loversplay-six.vercel.app/pagos/failure",
-                "pending": "https://loversplay-six.vercel.app/pagos/pending"
+                "success": "https://loversplay-six.vercel.app/pagos/success?pedido_id={pedido_id}",
+                "failure": "https://loversplay-six.vercel.app/pagos/failure?pedido_id={pedido_id}",
+                "pending": "https://loversplay-six.vercel.app/pagos/pending?pedido_id={pedido_id}"
             },
             "auto_return": "approved",
-            "notification_url": "https://mckenzie-burthensome-denita.ngrok-free.dev/api/pagos/webhook"
+            "notification_url": "https://mckenzie-burthensome-denita.ngrok-free.dev/api/pagos/webhook",
+            "binary_mode": True
         }
+        
 
         # Agregar reglas de pagos SOLO si existen
         if payment_rules is not None:
             preference_data["payment_methods"] = payment_rules
         
         
-        MP_ACCESS_TOKEN = "APP_USR-8996751005930022-112715-9268db70d5e2dc631505b74a818b8481-2611950632"
+        pref_info = sdk.preference().create(preference_data)
+        pref = pref_info.get("response", {})
+        
+        pref_id = pref["id"]
+        check = sdk.preference().get(pref_id)
+        print("PREFERENCE STORED:", check.get("response", {}).get("notification_url"))
 
-        res = requests.post(
-            "https://api.mercadopago.com/checkout/preferences",
-            headers={
-                "Authorization": f"Bearer {MP_ACCESS_TOKEN}",
-                "Content-Type": "application/json"
-            },
-            json=preference_data
-        )
-
-        pref = res.json()
+        if "id" not in pref:
+            raise Exception(f"MercadoPago Error: {pref_info}")
 
         if "id" not in pref:
             raise Exception(f"MercadoPago Error: {pref}")
-        
-        # =====================================================
-        # 5) Guardar pago
-        # =====================================================
-        pago = Pago(
-            pedido_id=pedido_id,
-            id_preferencia=pref["id"],
-            url_checkout=pref["init_point"],
-            referencia_externa=str(pedido_id),
-            estado="pendiente",
-            metodo_pago=tipo_pago,
-            monto=total
-        )
 
-        db.session.add(pago)
+        # =====================================================
+        # 6) Actualizar el mismo Pago con la preferencia
+        # =====================================================
+        pago_mp.id_preferencia = pref["id"]
+        pago_mp.url_checkout = pref["init_point"]
+        pago_mp.referencia_externa = str(pago_mp.id)  # opcional
         db.session.commit()
 
         return jsonify({
             "preference_id": pref["id"],
             "init_point": pref["init_point"],
-            "pedido_id": pedido_id
+            "pedido_id": pedido_id,
+            "pago_id": pago_mp.id
         }), 201
+
 
     except Exception as e:
         print("ERROR MP:", e)
         return jsonify({"error": str(e)}), 500
-
 
 def build_payment_restrictions(tipo_pago):
 
