@@ -98,6 +98,7 @@ class PedidoDetalle(db.Model):
     cantidad = db.Column(db.Integer, nullable=False)
     subtotal = db.Column(db.Float, nullable=False)
     
+    
 from datetime import datetime
 
 class Pago(db.Model):

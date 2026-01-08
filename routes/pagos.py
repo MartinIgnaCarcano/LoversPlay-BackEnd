@@ -2,7 +2,7 @@ from database import db
 import os
 import mercadopago
 from flask import Blueprint, request, jsonify
-from models import Pedido, Pago
+from models import Pedido, Pago, Producto
 import requests
 
 pagos_bp = Blueprint("pagos", __name__, url_prefix="/api/pagos")
@@ -82,20 +82,22 @@ def crear_preferencia_pago():
         data = request.get_json() or {}
 
         pedido_id = data.get("pedido_id")
-        items = data.get("items")
-        costo_envio = data.get("costo_envio", 0)
         tipo_pago = data.get("tipo_pago")  # debito | credito | mercadopago | transferencia
 
-        if not pedido_id or not items or not tipo_pago:
-            return jsonify({"error": "Faltan datos para crear la preferencia"}), 400
+        pedido = Pedido.query.get(pedido_id)
+        if not pedido:
+            return jsonify({"error": "Pedido no encontrado"}), 404
+
+        detalles = pedido.detalles  
+        costo_envio = float(pedido.costo_envio or 0)
+
+        if not detalles:
+            return jsonify({"error": "El pedido no tiene items"}), 400
 
         # =====================================================
         # 0) Si el pago es por transferencia → NO usar Mercado Pago
         # =====================================================
         if tipo_pago == "transferencia":
-            pedido = Pedido.query.get(pedido_id)
-            if not pedido:
-                return jsonify({"error": "Pedido no encontrado"}), 404
             pago = Pago(
                 pedido_id=pedido_id,
                 referencia_externa=str(pedido_id),
@@ -126,21 +128,29 @@ def crear_preferencia_pago():
         # 1) Armamos items Mercado Pago
         # =====================================================
         mp_items = []
-        total = 0
+        total = 0.0
 
-        for item in items:
-            subtotal = item["precio"] * item["cantidad"]
-            total += subtotal
+        for d in detalles:
+            prod = d.producto  # <-- gracias al backref
+            if not prod:
+                return jsonify({"error": f"Producto no encontrado: {d.producto_id}"}), 404
+
+            unit_price = float(prod.precio)  # o subtotal/cantidad, pero mejor usar precio real
+            qty = int(d.cantidad)
 
             mp_items.append({
-                "id": str(item["producto_id"]),
-                "title": item["nombre"],
-                "quantity": item["cantidad"],
-                "unit_price": float(item["precio"]),
+                "id": str(prod.id),
+                "title": prod.nombre,
+                "quantity": qty,
+                "unit_price": unit_price,
                 "currency_id": "ARS"
             })
 
-        # Agregar costo de envío
+            total += unit_price * qty
+
+        # =====================================================
+        # 2) Costo de envio y recargo por credito
+        # =====================================================
         if costo_envio > 0:
             total += costo_envio
             mp_items.append({
@@ -151,14 +161,12 @@ def crear_preferencia_pago():
                 "currency_id": "ARS"
             })
 
-        # =====================================================
-        # 2) Si es crédito aplicamos +10%
-        # =====================================================
+        # crédito +10%
         if tipo_pago == "credito":
-            total *= 1.10  # recargo
-            for item in mp_items:
-                item["unit_price"] = round(item["unit_price"] * 1.10, 2)
-
+            total = round(total * 1.10, 2)
+            for it in mp_items:
+                it["unit_price"] = round(float(it["unit_price"]) * 1.10, 2)
+                
         # =====================================================
         # 3) Restricciones según tipo pago
         # =====================================================
