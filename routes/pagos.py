@@ -2,8 +2,13 @@ from database import db
 import os
 import mercadopago
 from flask import Blueprint, request, jsonify
-from models import Pedido, Pago, Producto
-import requests
+from models import Pedido, Pago, Usuario
+from services.notifications import (
+    send_user_payment_approved,
+    send_user_payment_rejected,
+    send_admin_payment_approved,
+    send_user_transfer_instructions
+)
 
 pagos_bp = Blueprint("pagos", __name__, url_prefix="/api/pagos")
 sdk = mercadopago.SDK("APP_USR-8996751005930022-112715-9268db70d5e2dc631505b74a818b8481-2611950632")
@@ -48,7 +53,9 @@ def webhook_mp():
         pedido = Pedido.query.get(pago_reg.pedido_id)
         if not pedido:
             return jsonify({"status": "pedido_not_found"}), 200
-
+        
+        previous_estado = pago_reg.estado #guardar para el mail
+        
         estado = pago.get("status")
         pago_reg.id_pago_mp = str(payment_id)
         pago_reg.estado = estado
@@ -68,8 +75,35 @@ def webhook_mp():
             pedido.estado = "PENDIENTE"
 
         db.session.commit()
-        return jsonify({"status": "ok"}), 200
+        
+        # ✅ Envío de mails solo si cambió el estado
+        if estado != previous_estado:
+            usuario = Usuario.query.get(pedido.usuario_id)
 
+            if estado == "approved":
+                # Usuario
+                if usuario and (pago_reg.ultimo_estado_notificado != "approved"):
+                    send_user_payment_approved(usuario, pedido, pago_reg)
+
+                # Admin
+                if usuario and not pago_reg.notificado_admin:
+                    send_admin_payment_approved(pedido, pago_reg, usuario)
+
+                pago_reg.ultimo_estado_notificado = "approved"
+                pago_reg.notificado_user = True
+                pago_reg.notificado_admin = True
+                db.session.commit()
+
+            elif estado == "rejected":
+                if usuario and (pago_reg.ultimo_estado_notificado != "rejected"):
+                    send_user_payment_rejected(usuario, pedido, pago_reg)
+
+                pago_reg.ultimo_estado_notificado = "rejected"
+                pago_reg.notificado_user = True
+                db.session.commit()
+                
+        return jsonify({"status": "ok"}), 200
+    
     except Exception as e:
         # IMPORTANTÍSIMO: no tires 500 si querés evitar reintentos infinitos por algo que es tu bug
         print("ERROR WEBHOOK:", repr(e))
@@ -109,19 +143,24 @@ def crear_preferencia_pago():
             )
             db.session.add(pago)
             db.session.commit()
-
+            
+            instrucciones = {
+                "alias": "TU_ALIAS",
+                "cbu": "TU_CBU",
+                "titular": "TU_TITULAR",
+                "cuit": "TU_CUIT",
+                "concepto": f"PEDIDO {pedido_id}"
+            }
+            
+            usuario = Usuario.query.get(pedido.usuario_id)
+            if usuario:
+                send_user_transfer_instructions(usuario, pedido, pago, instrucciones)
             return jsonify({
                 "mensaje": "Transferencia registrada",
                 "pedido_id": pedido_id,
                 "monto": pedido.total,
                 "referencia": str(pedido_id),
-                "instrucciones": {
-                    "alias": "TU_ALIAS",
-                    "cbu": "TU_CBU",
-                    "titular": "TU_TITULAR",
-                    "cuit": "TU_CUIT",
-                    "concepto": f"PEDIDO {pedido_id}"
-                }
+                "instrucciones": instrucciones
             }), 201
 
         # =====================================================

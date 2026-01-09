@@ -56,6 +56,7 @@ class Producto(db.Model):
     __tablename__ = "productos"
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(150), nullable=False)  # Corresponde a 'name'
+    activo = db.Column(db.Boolean, default=True)
     slug = db.Column(db.String(150), unique=True, nullable=False) # Nuevo atributo para 'slug'
     precio = db.Column(db.Float, nullable=False) # Corresponde a 'price'
     descripcion_corta = db.Column(db.String(255)) # Nuevo atributo para 'shortDesc'
@@ -64,15 +65,14 @@ class Producto(db.Model):
     peso = db.Column(db.Float, default=0.4)  # en kg
     url_imagen_principal = db.Column(db.String(200)) # Podría usarse para la imagen principal de 'images'
     categoria_id = db.Column(db.Integer, db.ForeignKey("categorias.id"))
-
+    
     vistas = db.Column(db.Integer, default=0) # Nuevo atributo para 'views'
     valoracion_promedio = db.Column(db.Float, default=0.0) # Nuevo atributo para 'rating'
     
-    imagenes = db.relationship("ImagenProducto", backref="producto", lazy=True)
+    imagenes = db.relationship("ImagenProducto", backref="producto", lazy=True, cascade="all, delete-orphan", passive_deletes=True,)
     resenas = db.relationship("Resena", backref="producto", lazy=True)
     detalles_pedido = db.relationship("PedidoDetalle", backref="producto", lazy=True)
 
-    
 class ImagenProducto(db.Model):
     __tablename__ = "imagenes_productos"
     id = db.Column(db.Integer, primary_key=True)
@@ -134,7 +134,6 @@ class Pago(db.Model):
     ultimo_estado_notificado = db.Column(db.String(50), nullable=True)
 
     pedido = db.relationship("Pedido", backref="pagos", lazy=True)
-
 
 class Resena(db.Model):
     __tablename__ = "resenas"

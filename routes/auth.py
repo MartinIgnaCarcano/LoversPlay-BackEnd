@@ -5,6 +5,7 @@ from flask_jwt_extended import (
 )
 from models import Usuario, Direccion, Favorito
 from database import db
+from services.notifications import send_user_welcome
 
 auth_bp = Blueprint("auth", __name__,url_prefix="/api/auth")
 
@@ -33,6 +34,8 @@ def crear_usuario():
     db.session.add(usuario)
     db.session.commit()
 
+    send_user_welcome(usuario)
+    
     return jsonify({"message": "Usuario creado con éxito"}), 201
 
 
@@ -236,16 +239,20 @@ def listar_usuarios():
         # Paginación
         page = int(request.args.get("page", 1))
         per_page = int(request.args.get("per_page", 10))
-
         offset_value = (page - 1) * per_page
 
-        # Query principal
+        # Filtro activo (opcional)
+        activo_param = request.args.get("activo")  # "true" | "false" | None
+
         query = Usuario.query
 
-        # Cantidad total para paginación
+        if activo_param is not None:
+            activo_bool = activo_param.lower() == "true"
+            query = query.filter(Usuario.activo == activo_bool)
+
+        # Total con filtros aplicados
         total = query.count()
 
-        # Obtener la página actual
         usuarios = (
             query
             .order_by(Usuario.id.asc())
@@ -254,7 +261,6 @@ def listar_usuarios():
             .all()
         )
 
-        # Serialización
         data = []
         for user in usuarios:
             direccion = user.direccion
@@ -286,7 +292,8 @@ def listar_usuarios():
         }), 200
 
     except Exception as e:
-        return jsonify({"error": "Error al obtener usuarios", "detalle": str(e)}), 500
+        return jsonify({"error": str(e)}), 500
+
 
 @auth_bp.route("/<int:id>", methods=["GET"])
 @jwt_required()
@@ -304,6 +311,7 @@ def obtener_usuario_admin(id):
         "email": user.email,
         "telefono": user.telefono,
         "rol": user.rol,
+        "activo": user.activo,
         "fecha_registro": user.fecha_registro.isoformat(),
         "direccion": {
             "id": direccion.id,
@@ -367,6 +375,13 @@ def actualizar_usuario_admin(id):
             )
             db.session.add(nueva)
 
+    if "activo" in data:
+        a = data["activo"]
+        if a==True:
+            user.activo = True
+        else:
+            user.activo = False
+    
     db.session.commit()
 
     return jsonify({"message": "Usuario actualizado con éxito"}), 200

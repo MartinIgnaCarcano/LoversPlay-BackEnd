@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import Pedido, PedidoDetalle, Producto, Usuario, Pago
 from database import db
 from sqlalchemy import desc
+from services.notifications import send_admin_new_order, send_user_order_created
 
 pedidos_bp = Blueprint("pedidos", __name__,url_prefix="/api/pedidos")
 
@@ -86,7 +87,6 @@ def listar_todos_pedidos():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 # Ver detalle de un pedido
 @pedidos_bp.route("/unico/<int:id>", methods=["GET"])
 def detalle_pedido(id):
@@ -119,10 +119,11 @@ def detalle_pedido(id):
 @jwt_required()
 def actualizar_pedido(id):
     user_id = get_jwt_identity()
+    print(user_id)
     user = Usuario.query.get(user_id)
     
     if not user or user.rol != "ADMIN":
-        return jsonify({"error": "acceso denegado"}), 404
+        return jsonify({"error": "acceso denegado"}), 401
     
     data = request.get_json() or {}
     pedido = Pedido.query.get_or_404(id)
@@ -240,6 +241,13 @@ def crear_pedido():
         db.session.add(pedido)
         db.session.commit()
 
+        # ✅ MAIL al usuario
+        if usuario and usuario.email:
+            send_user_order_created(usuario, pedido)
+
+        # ✅ MAIL al admin
+        send_admin_new_order(pedido, usuario)
+        
         return jsonify({
             "pedido_id": pedido.id,
             "total": total_final,

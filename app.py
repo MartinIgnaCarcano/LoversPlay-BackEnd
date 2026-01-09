@@ -12,9 +12,11 @@ from flask_cors import CORS
 from flask_mail import Mail
 import flask_jwt_extended
 import os
+from flask import request
+from services.email_service import send_email
+from extension import mail  
 print("VERSIÓN JWT:", flask_jwt_extended.__version__)
 
-mail = Mail()
 
 app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = "cambia-esto-por-un-secreto-seguro"  # usa variable de entorno en prod
@@ -29,14 +31,21 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(seconds=86400)  # expira en 1 hora
 
-# ====== MAIL CONFIG (usar variables de entorno en prod) ======
-app.config["MAIL_SERVER"] = os.getenv("MAIL_SERVER", "smtp.gmail.com")
+# ====== MAIL CONFIG (BREVO) ======
+app.config["MAIL_SERVER"] = os.getenv("MAIL_SERVER", "smtp-relay.brevo.com")
 app.config["MAIL_PORT"] = int(os.getenv("MAIL_PORT", "587"))
-app.config["MAIL_USE_TLS"] = True
-app.config["MAIL_USERNAME"] = os.getenv("MAIL_USERNAME")     # tu email
-app.config["MAIL_PASSWORD"] = os.getenv("MAIL_PASSWORD")     # app password
-app.config["MAIL_DEFAULT_SENDER"] = os.getenv("MAIL_SENDER", app.config["MAIL_USERNAME"])
-app.config["ADMIN_EMAIL"] = os.getenv("ADMIN_EMAIL")         # email admin destino
+app.config["MAIL_USE_TLS"] = os.getenv("MAIL_USE_TLS", "true").lower() == "true"
+app.config["MAIL_USE_SSL"] = os.getenv("MAIL_USE_SSL", "false").lower() == "true"
+
+app.config["MAIL_USERNAME"] = os.getenv("MAIL_USERNAME")  # login SMTP Brevo
+app.config["MAIL_PASSWORD"] = os.getenv("MAIL_PASSWORD")  # clave SMTP Brevo
+
+# Ej: "Lovers Play <no-reply@tudominio.com>" o "Lovers Play <tu@correo.com>"
+app.config["MAIL_DEFAULT_SENDER"] = os.getenv("MAIL_DEFAULT_SENDER", app.config["MAIL_USERNAME"])
+
+# admin opcional
+app.config["ADMIN_EMAIL"] = os.getenv("ADMIN_EMAIL")
+
 
 
 db.init_app(app)
@@ -68,6 +77,19 @@ def unauthorized_callback(error):
 def revoked_token_callback(jwt_header=None, jwt_payload=None):
     return False
 
+@app.route("/api/test-mail", methods=["POST"])
+def test_mail():
+    data = request.get_json() or {}
+    to = data.get("to") or os.getenv("ADMIN_EMAIL")
+    if not to:
+        return jsonify({"error": "Falta 'to' y no hay ADMIN_EMAIL"}), 400
+
+    send_email(
+        to=to,
+        subject="Test Brevo ✅",
+        html="<h2>Brevo funcionando 🎉</h2><p>Este email salió desde tu Flask.</p>",
+    )
+    return jsonify({"status": "ok", "sent_to": to}), 200
 
 
 # Registrar rutas
@@ -87,3 +109,4 @@ if __name__ == "__main__":
 
 #activar venv
 #venv\Scripts\activate
+
