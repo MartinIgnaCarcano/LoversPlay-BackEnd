@@ -193,10 +193,10 @@ def crear_preferencia_pago():
         # =====================================================
         preference_data = {
             "items": mp_items,
-            "external_reference": str(pago_mp.id), 
+            "external_reference": str(pedido_id), 
             "back_urls": {
                 "success": "https://loversplay-six.vercel.app/pagos/success?pedido_id={pedido_id}",
-                "failure": "https://loversplay-six.vercel.app/pagos/failure?pedido_id={pedido_id}",
+                "failure": "https://loversplay-six.vercel.app/pagos/failure",
                 "pending": "https://loversplay-six.vercel.app/pagos/pending?pedido_id={pedido_id}"
             },
             "auto_return": "approved",
