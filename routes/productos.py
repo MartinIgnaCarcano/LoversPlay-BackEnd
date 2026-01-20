@@ -56,8 +56,7 @@ def listar_todos_productos():
 
         include_inactive = request.args.get("include_inactive", "false").lower() == "true"
 
-        query = Producto.query
-
+        query = Producto.query.filter(Producto.activo == True)
 
         productos = (
             query
@@ -294,64 +293,68 @@ def crear_producto():
     admin = require_admin()
     if not admin:
         return jsonify({"error": "Acceso denegado"}), 403
-    # Datos del formulario
-    nombre = request.form.get("nombre")
-    activo=True,
-    descripcion_corta = request.form.get("descripcion_corta")
-    descripcion_larga = request.form.get("descripcion_larga")
-    precio = request.form.get("precio", type=float)
-    stock = request.form.get("stock", type=int, default=0)
-    peso = request.form.get("peso")
-    categoria_id = request.form.get("categoria_id", type=int)
-    slug = request.form.get("slug")
-    
-    producto = Producto(
-        nombre=nombre,
-        descripcion_corta=descripcion_corta,
-        descripcion_larga=descripcion_larga,
-        precio=precio,
-        stock=stock,
-        peso=peso,
-        categoria_id=categoria_id,
-        slug=slug,
-        vistas=0,
-        valoracion_promedio=0.0,
-    )
+    try:
+        # Datos del formulario
+        nombre = request.form.get("nombre")
+        descripcion_corta = request.form.get("descripcion_corta")
+        descripcion_larga = request.form.get("descripcion_larga")
+        precio = request.form.get("precio", type=float)
+        stock = request.form.get("stock", type=int, default=0)
+        peso = request.form.get("peso")
+        categoria_id = request.form.get("categoria_id", type=int)
+        slug = request.form.get("slug")
+        
+        producto = Producto(
+            nombre=nombre,
+            descripcion_corta=descripcion_corta,
+            descripcion_larga=descripcion_larga,
+            precio=precio,
+            stock=stock,
+            peso=peso,
+            categoria_id=categoria_id,
+            slug=slug,
+            vistas=0,
+            valoracion_promedio=0.0,
+        )
 
-    db.session.add(producto)
-    db.session.flush()  # Genera el id del producto sin hacer commit
+        db.session.add(producto)
+        db.session.flush()  # Genera el id del producto sin hacer commit
 
-    if "imagen_principal" in request.files:
-        file = request.files["imagen_principal"]
-        if file and allowed_file(file.filename):
-            filename = secure_filename(nombreArchivoFinal(file.filename, producto.nombre, producto.id, "principal"))
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(filepath)
-            producto.url_imagen_principal = f"/{filepath}"
-        else:
-            return jsonify({"msg": "Archivo de imagen principal no permitido"}), 400
-    # Archivos
-    if "imagenes" in request.files:
-        files = request.files.getlist("imagenes")
-        for i, file in enumerate(files):
+        if "imagen_principal" in request.files:
+            file = request.files["imagen_principal"]
             if file and allowed_file(file.filename):
-                filename = secure_filename(nombreArchivoFinal(file.filename, producto.nombre, producto.id, i))
+                filename = secure_filename(nombreArchivoFinal(file.filename, producto.nombre, producto.id, "principal"))
                 filepath = os.path.join(UPLOAD_FOLDER, filename)
                 file.save(filepath)
-                producto.imagenes.append(ImagenProducto(url_imagen=f"/{filepath}"))
+                producto.url_imagen_principal = f"/{filepath}"
             else:
-                return jsonify({"msg": "Archivo de imagen no permitido"}), 400
+                return jsonify({"msg": "Archivo de imagen principal no permitido"}), 400
+        # Archivos
+        if "imagenes" in request.files:
+            files = request.files.getlist("imagenes")
+            for i, file in enumerate(files):
+                if file and allowed_file(file.filename):
+                    filename = secure_filename(nombreArchivoFinal(file.filename, producto.nombre, producto.id, i))
+                    filepath = os.path.join(UPLOAD_FOLDER, filename)
+                    file.save(filepath)
+                    producto.imagenes.append(ImagenProducto(url_imagen=f"/{filepath}"))
+                else:
+                    return jsonify({"msg": "Archivo de imagen no permitido"}), 400
 
-    # Características
-    if caracteristicas := request.files.get("caracteristicas"):
-        try:
-            producto.caracteristicas = json.loads(caracteristicas.read())
-        except:
-            return jsonify({"msg": "Características no es un JSON válido"}), 400
+        # Características
+        if caracteristicas := request.files.get("caracteristicas"):
+            try:
+                producto.caracteristicas = json.loads(caracteristicas.read())
+            except:
+                return jsonify({"msg": "Características no es un JSON válido"}), 400
 
-    db.session.commit()  # Commit final
+        db.session.commit()  # Commit final
 
-    return jsonify({"message": "Producto creado", "id": producto.id}), 201
+        return jsonify({"message": "Producto creado", "id": producto.id}), 201
+    except Exception as e:
+        db.session.rollback()
+        print("ERROR:", repr(e))
+        return jsonify({"error": "Error interno"}), 500
 
 # Actualizar producto (ADMIN)
 @productos_bp.route("/<int:id>", methods=["PATCH"])
@@ -360,66 +363,71 @@ def actualizar_producto(id):
     admin = require_admin()
     if not admin:
         return jsonify({"error": "Acceso denegado"}), 403
-    producto = Producto.query.get_or_404(id)
+    try:
+        producto = Producto.query.get_or_404(id)
 
-    form = request.form
+        form = request.form
 
-    if "nombre" in form:
-        producto.nombre = form.get("nombre")
+        if "nombre" in form:
+            producto.nombre = form.get("nombre")
 
-    if "slug" in form:
-        producto.slug = form.get("slug")
+        if "slug" in form:
+            producto.slug = form.get("slug")
 
-    if "descripcion_corta" in form:
-        producto.descripcion_corta = form.get("descripcion_corta")
+        if "descripcion_corta" in form:
+            producto.descripcion_corta = form.get("descripcion_corta")
 
-    if "descripcion_larga" in form:
-        producto.descripcion_larga = form.get("descripcion_larga")
+        if "descripcion_larga" in form:
+            producto.descripcion_larga = form.get("descripcion_larga")
 
-    if "precio" in form:
-        producto.precio = float(form.get("precio"))
+        if "precio" in form:
+            producto.precio = float(form.get("precio"))
 
-    if "stock" in form:
-        producto.stock = int(form.get("stock"))
+        if "stock" in form:
+            producto.stock = int(form.get("stock"))
 
-    if "peso" in form:
-        producto.peso = float(form.get("peso"))
+        if "peso" in form:
+            producto.peso = float(form.get("peso"))
 
-    if "categoria_id" in form:
-        producto.categoria_id = int(form.get("categoria_id"))
+        if "categoria_id" in form:
+            producto.categoria_id = int(form.get("categoria_id"))
 
-    # 🖼️ Imagen principal nueva
-    if "imagen_principal" in request.files:
-        file = request.files["imagen_principal"]
-        if file and allowed_file(file.filename):
-            filename = secure_filename(
-                nombreArchivoFinal(file.filename, producto.nombre, producto.id, "principal")
-            )
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(filepath)
-            producto.url_imagen_principal = f"/{filepath}"
-        else:
-            return jsonify({"msg": "Imagen principal no permitida"}), 400
-
-    # 🖼️ Imágenes secundarias nuevas
-    if "imagenes" in request.files:
-        files = request.files.getlist("imagenes")
-        for i, file in enumerate(files):
+        # 🖼️ Imagen principal nueva
+        if "imagen_principal" in request.files:
+            file = request.files["imagen_principal"]
             if file and allowed_file(file.filename):
                 filename = secure_filename(
-                    nombreArchivoFinal(file.filename, producto.nombre, producto.id, i)
+                    nombreArchivoFinal(file.filename, producto.nombre, producto.id, "principal")
                 )
                 filepath = os.path.join(UPLOAD_FOLDER, filename)
                 file.save(filepath)
-                producto.imagenes.append(
-                    ImagenProducto(url_imagen=f"/{filepath}")
-                )
+                producto.url_imagen_principal = f"/{filepath}"
             else:
-                return jsonify({"msg": "Imagen secundaria no permitida"}), 400
+                return jsonify({"msg": "Imagen principal no permitida"}), 400
 
-    db.session.commit()
-    return jsonify({"message": "Producto actualizado"}), 200
+        # 🖼️ Imágenes secundarias nuevas
+        if "imagenes" in request.files:
+            files = request.files.getlist("imagenes")
+            for i, file in enumerate(files):
+                if file and allowed_file(file.filename):
+                    filename = secure_filename(
+                        nombreArchivoFinal(file.filename, producto.nombre, producto.id, i)
+                    )
+                    filepath = os.path.join(UPLOAD_FOLDER, filename)
+                    file.save(filepath)
+                    producto.imagenes.append(
+                        ImagenProducto(url_imagen=f"/{filepath}")
+                    )
+                else:
+                    return jsonify({"msg": "Imagen secundaria no permitida"}), 400
 
+        db.session.commit()
+        return jsonify({"message": "Producto actualizado"}), 200
+    except Exception as e:
+        db.session.rollback()
+        print("ERROR:", repr(e))
+        return jsonify({"error": "Error interno"}), 500
+    
 # Eliminar producto (ADMIN)
 @productos_bp.route("/<int:id>", methods=["DELETE"])
 @jwt_required()
@@ -427,37 +435,13 @@ def eliminar_producto(id):
     admin = require_admin()
     if not admin:
         return jsonify({"error": "Acceso denegado"}), 403
-    producto = Producto.query.get_or_404(id)
-    producto.activo=False
-    db.session.commit()
-    return jsonify({"message": "Producto desactivado"}), 200
-
-
-from sqlalchemy import text
-@productos_bp.route("/reparar_json", methods=["GET"])
-def reparar_json():
-    # Solo traemos id y especificaciones como string
-    productos = db.session.execute(text("SELECT id, especificaciones FROM productos")).fetchall()
-    rotos = []
-
-    for p in productos:
-        id_ = p.id
-        espec = p.especificaciones
-        try:
-            import json
-            if espec:  # si no es None o vacío
-                _ = json.loads(espec)
-        except (json.JSONDecodeError, TypeError):
-            rotos.append(id_)
-            # corregimos automáticamente
-            db.session.execute(
-                text("UPDATE productos SET especificaciones = '{}' WHERE id = :id"),
-                {"id": id_}
-            )
-
-    db.session.commit()
-    return jsonify({
-        "productos_corregidos": rotos,
-        "total_corregidos": len(rotos)
-    })
+    try:    
+        producto = Producto.query.get_or_404(id)
+        producto.activo=False
+        db.session.commit()
+        return jsonify({"message": "Producto desactivado"}), 200
+    except Exception as e:
+        db.session.rollback()
+        print("ERROR:", repr(e))
+        return jsonify({"error": "Error interno"}), 500
 

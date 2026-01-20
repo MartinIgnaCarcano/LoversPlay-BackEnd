@@ -66,13 +66,23 @@ def webhook_mp():
         pago_reg.id_orden_mercante = str((pago.get("order") or {}).get("id"))
 
         if estado == "approved":
-            pedido.estado = "PAGADO"
+            if pedido.estado == "EXPIRADO":
+                # pago aprobado pero pedido vencido → revisión manual
+                pedido.estado = "REVISAR"   # o "PAGO_TARDE"
+            else:
+                pedido.estado = "PAGADO"
+                pedido.stock_state = "confirmed"
+                pedido.expires_at = None
+
         elif estado in ("pending", "in_process", "in_mediation"):
-            pedido.estado = "PENDIENTE"
+            # Ojo: acá vos estabas usando "PENDIENTE" pero tu sistema usa "PENDIENTE_PAGO"
+            pedido.estado = "PENDIENTE_PAGO"
+
         elif estado == "rejected":
             pedido.estado = "RECHAZADO"
         else:
-            pedido.estado = "PENDIENTE"
+            pedido.estado = "PENDIENTE_PAGO"
+
               
         db.session.commit()
         
@@ -234,9 +244,9 @@ def crear_preferencia_pago():
             "items": mp_items,
             "external_reference": str(pago_mp.id), 
             "back_urls": {
-                "success": "https://loversplay-six.vercel.app/pagos?status=success&pedido_id={pedido_id}",
+                "success": f"https://loversplay-six.vercel.app/pagos?status=success&pedido_id={pedido_id}",
                 "failure": "https://loversplay-six.vercel.app/pagos?status=failure",
-                "pending": "https://loversplay-six.vercel.app/pagos?status=pending&pedido_id={pedido_id}"
+                "pending": f"https://loversplay-six.vercel.app/pagos?status=pending&pedido_id={pedido_id}"
             },
             "auto_return": "approved",
             "notification_url": os.getenv("MP_NOTIFICATION_URL"),
