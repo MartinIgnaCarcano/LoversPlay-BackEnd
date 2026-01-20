@@ -8,11 +8,20 @@ from datetime import datetime, timedelta
 
 pedidos_bp = Blueprint("pedidos", __name__,url_prefix="/api/pedidos")
 
+def require_admin():
+    user_id = get_jwt_identity()
+    user = Usuario.query.get(int(user_id))
+    if not user or user.rol != "admin":
+        return None
+    return user
+
 #1440 minutos = 24hs
 RESERVA_MINUTOS = 1440
 
-# Listar pedidos del usuario logueado
-@pedidos_bp.route("/", methods=["GET"], strict_slashes=False)
+#-----------------
+#-----USER--------
+#-----------------
+@pedidos_bp.route("/", methods=["GET"], strict_slashes=False) # Listar pedidos del usuario logueado
 @jwt_required()
 def listar_pedidos():
     try:
@@ -45,7 +54,6 @@ def listar_pedidos():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 # Ver detalle de un pedido
 @pedidos_bp.route("/unico/<int:id>", methods=["GET"])
 @jwt_required()
@@ -74,44 +82,8 @@ def detalle_pedido(id):
         ]
     })
 
-# Actualizar estado del pedido (solo admin para cambiar a ENVIADO o ENTREGADO)
-@pedidos_bp.route("/<int:id>", methods=["PATCH"])
-@jwt_required()
-def actualizar_pedido(id):
-    user_id = get_jwt_identity()
-    print(user_id)
-    user = Usuario.query.get(user_id)
-    
-    if not user or user.rol != "ADMIN":
-        return jsonify({"error": "acceso denegado"}), 401
-    
-    data = request.get_json() or {}
-    pedido = Pedido.query.get_or_404(id)
-
-    # Solo admin puede cambiar estado
-    if "estado" in data:
-        pedido.estado = data["estado"]
-
-    db.session.commit()
-    return jsonify({"message": "Pedido actualizado", "estado": pedido.estado})
-
-@pedidos_bp.route("/<int:id>", methods=["DELETE"])
-@jwt_required()
-def eliminar_pedido(id):
-    user_id = get_jwt_identity()
-    user = Usuario.query.get(user_id)
-    if not user or user.rol != "ADMIN":
-        return jsonify({"error": "acceso denegado"}), 404
-
-    pedido = Pedido.query.get(id)
-    
-    if not pedido:
-        return jsonify({"error": "Pedido no encontrado"}), 404
-    db.session.delete(pedido)
-    db.session.commit()
-    return jsonify({"message": "Pedido eliminado"}), 204
-
 @pedidos_bp.route("/", methods=["POST"])
+@jwt_required(optional=True)
 def crear_pedido():
     try:
         data = request.get_json()
@@ -120,12 +92,7 @@ def crear_pedido():
             return jsonify({"error": "Faltan detalles del pedido"}), 400
 
         # 1) usuario logueado o invitado
-        usuario_id = None
-        usuario = None
-        try:
-            usuario_id = get_jwt_identity()
-        except:
-            pass
+        usuario_id = get_jwt_identity()
 
         if not usuario_id:
             email = data.get("email")
@@ -154,8 +121,6 @@ def crear_pedido():
         total = 0
         detalles_pedido = []
 
-        # ✅ opcional pero recomendado: bloquear escritura mientras calculás
-        # (en SQLite es limitado, pero sirve como intención)
         for item in detalles:
             producto_id = item.get("producto_id")
             cantidad = int(item.get("cantidad", 1))
@@ -170,7 +135,6 @@ def crear_pedido():
             if cantidad > producto.stock:
                 return jsonify({"error": f"Stock insuficiente para {producto.nombre}"}), 400
 
-            # ✅ RESERVA: descuento ya
             producto.stock -= cantidad
 
             subtotal = float(producto.precio) * cantidad
@@ -220,10 +184,12 @@ def crear_pedido():
 #-----------------
 #----ADMIN--------
 #-----------------
-# Listar pedidos del usuario logueado
 @pedidos_bp.route("/listar", methods=["GET"])
 @jwt_required()
 def listar_todos_pedidos():
+    admin = require_admin()
+    if not admin:
+        return jsonify({"error": "Acceso denegado"}), 403
     try:
         page = int(request.args.get("page", 1))       # Página actual (default 1)
         per_page = int(request.args.get("per_page", 10))  # Productos por página (default 10)
@@ -266,9 +232,40 @@ def listar_todos_pedidos():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@pedidos_bp.route("/<int:id>", methods=["PATCH"]) # Actualizar estado del pedido
+@jwt_required()
+def actualizar_pedido(id):
+    admin = require_admin()
+    if not admin:
+        return jsonify({"error": "Acceso denegado"}), 403
+    
+    data = request.get_json() or {}
+    pedido = Pedido.query.get_or_404(id)
 
+    # Solo admin puede cambiar estado
+    if "estado" in data:
+        pedido.estado = data["estado"]
+
+    db.session.commit()
+    return jsonify({"message": "Pedido actualizado", "estado": pedido.estado})
+
+@pedidos_bp.route("/<int:id>", methods=["DELETE"])
+@jwt_required()
+def eliminar_pedido(id):
+    admin = require_admin()
+    if not admin:
+        return jsonify({"error": "Acceso denegado"}), 403
+
+    pedido = Pedido.query.get(id)
+    
+    if not pedido:
+        return jsonify({"error": "Pedido no encontrado"}), 404
+    db.session.delete(pedido)
+    db.session.commit()
+    return jsonify({"message": "Pedido eliminado"}), 204
 
 @pedidos_bp.route("/expirar", methods=["POST"])
+@jwt_required()
 def expirar_pedidos():
 
     now = datetime.utcnow()

@@ -9,6 +9,13 @@ from services.notifications import send_user_welcome
 
 auth_bp = Blueprint("auth", __name__,url_prefix="/api/auth")
 
+def require_admin():
+    user_id = get_jwt_identity()
+    user = Usuario.query.get(int(user_id))
+    if not user or user.rol != "admin":
+        return None
+    return user
+
 # -----------------------------------
 # REGISTER
 # -----------------------------------
@@ -231,12 +238,15 @@ def eliminar_favorito(id):
         }), 500
 
 # -----------------------------------
-# CRUD
+# CRUD -- ADMIN
 # -----------------------------------
 #Listar usuarios
 @auth_bp.route("/listar", methods=["GET"])
 @jwt_required()
 def listar_usuarios():
+    admin = require_admin()
+    if not admin:
+        return jsonify({"error": "Acceso denegado"}), 403
     try:
         # Paginación
         page = int(request.args.get("page", 1))
@@ -299,6 +309,10 @@ def listar_usuarios():
 @auth_bp.route("/<int:id>", methods=["GET"])
 @jwt_required()
 def obtener_usuario_admin(id):
+    admin = require_admin()
+    if not admin:
+        return jsonify({"error": "Acceso denegado"}), 403
+    
     user = Usuario.query.get(id)
 
     if not user:
@@ -330,6 +344,9 @@ def obtener_usuario_admin(id):
 @auth_bp.route("/<int:id>", methods=["PATCH"])
 @jwt_required()
 def actualizar_usuario_admin(id):
+    admin = require_admin()
+    if not admin:
+        return jsonify({"error": "Acceso denegado"}), 403
     user = Usuario.query.get(id)
 
     if not user:
@@ -390,6 +407,10 @@ def actualizar_usuario_admin(id):
 @auth_bp.route("/<int:id>", methods=["DELETE"])
 @jwt_required()
 def eliminar_usuario(id):
+    admin = require_admin()
+    if not admin:
+        return jsonify({"error": "Acceso denegado"}), 403
+    
     user = Usuario.query.get(id)
     if not user:
         return jsonify({"error": "Usuario no encontrado"}),404
