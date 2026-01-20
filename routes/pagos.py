@@ -2,7 +2,7 @@ from database import db
 import os
 import mercadopago
 from flask import Blueprint, request, jsonify
-from models import Pedido, Pago, Usuario
+from models import Pedido, Pago, Usuario, Producto
 from services.notifications import (
     send_user_payment_approved,
     send_user_payment_rejected,
@@ -73,7 +73,7 @@ def webhook_mp():
             pedido.estado = "RECHAZADO"
         else:
             pedido.estado = "PENDIENTE"
-
+              
         db.session.commit()
         
         # ✅ Envío de mails solo si cambió el estado
@@ -234,9 +234,9 @@ def crear_preferencia_pago():
             "items": mp_items,
             "external_reference": str(pedido_id), 
             "back_urls": {
-                "success": "https://loversplay-six.vercel.app/pagos/success?pedido_id={pedido_id}",
-                "failure": "https://loversplay-six.vercel.app/pagos/failure",
-                "pending": "https://loversplay-six.vercel.app/pagos/pending?pedido_id={pedido_id}"
+                "success": "https://loversplay-six.vercel.app/pagos?status=success&pedido_id={pedido_id}",
+                "failure": "https://loversplay-six.vercel.app/pagos?status=failure",
+                "pending": "https://loversplay-six.vercel.app/pagos?status=pending&pedido_id={pedido_id}"
             },
             "auto_return": "approved",
             "notification_url": "https://mckenzie-burthensome-denita.ngrok-free.dev/api/pagos/webhook",

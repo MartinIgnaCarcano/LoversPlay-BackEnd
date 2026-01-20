@@ -155,7 +155,7 @@ def detalle_producto(id):
                 Producto.activo == True  # ✅
             )
             .order_by(Producto.vistas.desc(), Producto.valoracion_promedio.desc())
-            .limit(4)
+            .limit(8)
             .all()
         )
 
@@ -369,7 +369,6 @@ def actualizar_producto(id):
 
     db.session.commit()
     return jsonify({"message": "Producto actualizado"}), 200
-
 
 # Eliminar producto (ADMIN)
 @productos_bp.route("/<int:id>", methods=["DELETE"])

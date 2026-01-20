@@ -4,8 +4,12 @@ from models import Pedido, PedidoDetalle, Producto, Usuario, Pago
 from database import db
 from sqlalchemy import desc
 from services.notifications import send_admin_new_order, send_user_order_created
+from datetime import datetime, timedelta
 
 pedidos_bp = Blueprint("pedidos", __name__,url_prefix="/api/pedidos")
+
+#1440 minutos = 24hs
+RESERVA_MINUTOS = 1440
 
 # Listar pedidos del usuario logueado
 @pedidos_bp.route("/", methods=["GET"], strict_slashes=False)
@@ -151,71 +155,69 @@ def eliminar_pedido(id):
     db.session.commit()
     return jsonify({"message": "Pedido eliminado"}), 204
 
-# Crear un pedido manual (sin mp por el momento)
 @pedidos_bp.route("/", methods=["POST"])
 def crear_pedido():
     try:
         data = request.get_json()
         detalles = data.get("detalles", [])
-
         if not detalles:
             return jsonify({"error": "Faltan detalles del pedido"}), 400
 
-        # ================================================================
-        # 1) Intentar obtener usuario LOGEADO
-        # ================================================================
+        # 1) usuario logueado o invitado
         usuario_id = None
+        usuario = None
         try:
             usuario_id = get_jwt_identity()
         except:
-            pass  # si no hay token, get_jwt_identity() levanta error silencioso
+            pass
 
-        # ================================================================
-        # 2) Si NO está logeado → buscar o crear usuario invitado
-        # ================================================================
         if not usuario_id:
             email = data.get("email")
             nombre = data.get("nombre", "Invitado")
             telefono = data.get("telefono")
-
             if not email:
                 return jsonify({"error": "Para pedidos sin registrarse, se requiere email"}), 400
 
-            # Buscar si ya existe ese email
             usuario = Usuario.query.filter_by(email=email).first()
-
-            # Crear invitado si no existe
             if not usuario:
                 usuario = Usuario(
                     nombre=nombre,
                     email=email,
                     telefono=telefono,
                     rol="guest",
-                    password_hash=""   # sin contraseña
+                    password_hash=""
                 )
                 db.session.add(usuario)
                 db.session.commit()
 
             usuario_id = usuario.id
-        
-        # ================================================================
-        # 3) Crear pedido normal
-        # ================================================================
+        else:
+            usuario = Usuario.query.get(usuario_id)
+
+        # 2) crear pedido + reservar stock (transacción)
         total = 0
         detalles_pedido = []
 
+        # ✅ opcional pero recomendado: bloquear escritura mientras calculás
+        # (en SQLite es limitado, pero sirve como intención)
         for item in detalles:
-            producto = Producto.query.get(item["producto_id"])
-            if not producto:
-                return jsonify({"error": f"Producto {item['producto_id']} no encontrado"}), 404
+            producto_id = item.get("producto_id")
+            cantidad = int(item.get("cantidad", 1))
 
-            cantidad = item.get("cantidad", 1)
+            producto = Producto.query.get(producto_id)
+            if not producto:
+                return jsonify({"error": f"Producto {producto_id} no encontrado"}), 404
+
+            if cantidad <= 0:
+                return jsonify({"error": "Cantidad inválida"}), 400
 
             if cantidad > producto.stock:
                 return jsonify({"error": f"Stock insuficiente para {producto.nombre}"}), 400
-            
+
+            # ✅ RESERVA: descuento ya
             producto.stock -= cantidad
-            subtotal = producto.precio * cantidad
+
+            subtotal = float(producto.precio) * cantidad
             total += subtotal
 
             detalles_pedido.append(
@@ -225,29 +227,28 @@ def crear_pedido():
                     subtotal=subtotal
                 )
             )
-            
-        #Sumamos el envio al costo total del pedido
-        costo_envio = data.get("costo_envio", 0)
+
+        costo_envio = float(data.get("costo_envio", 0) or 0)
         total_final = total + costo_envio
-        
+
         pedido = Pedido(
             usuario_id=usuario_id,
             total=total_final,
             costo_envio=costo_envio,
-            estado="PENDIENTE",
-            detalles=detalles_pedido
+            estado="PENDIENTE_PAGO",
+            detalles=detalles_pedido,
+            expires_at=datetime.utcnow() + timedelta(minutes=RESERVA_MINUTOS),
+            stock_state="reserved"
         )
 
         db.session.add(pedido)
         db.session.commit()
 
-        # ✅ MAIL al usuario
+        # ✅ mails (pedido creado + admin nuevo pedido)
         if usuario and usuario.email:
             send_user_order_created(usuario, pedido)
-
-        # ✅ MAIL al admin
         send_admin_new_order(pedido, usuario)
-        
+
         return jsonify({
             "pedido_id": pedido.id,
             "total": total_final,
@@ -256,7 +257,52 @@ def crear_pedido():
         }), 201
 
     except Exception as e:
+        db.session.rollback()
         print("ERROR:", e)
         return jsonify({"error": str(e)}), 500
 
 
+@pedidos_bp.route("/expirar", methods=["POST"])
+def expirar_pedidos():
+
+    now = datetime.utcnow()
+
+    expirables = (
+        Pedido.query
+        .filter(Pedido.estado == "PENDIENTE_PAGO")
+        .filter(Pedido.expires_at.isnot(None))
+        .filter(Pedido.expires_at < now)
+        .all()
+    )
+
+    expired_ids = []
+    released_stock_for = []
+
+    for pedido in expirables:
+        # idempotencia: si ya liberaste stock, no repetir
+        if pedido.stock_state != "reserved":
+            pedido.estado = "EXPIRADO"
+            expired_ids.append(pedido.id)
+            continue
+
+        # devolver stock según detalles
+        for d in pedido.detalles:
+            prod = Producto.query.get(d.producto_id)
+            if prod:
+                prod.stock += int(d.cantidad)
+
+        pedido.stock_state = "released"
+        pedido.estado = "EXPIRADO"
+
+        expired_ids.append(pedido.id)
+        released_stock_for.append(pedido.id)
+
+    db.session.commit()
+
+    return jsonify({
+        "now_utc": now.isoformat(),
+        "found": len(expirables),
+        "expired": len(expired_ids),
+        "released_stock_for": released_stock_for,
+        "expired_ids": expired_ids
+    }), 200

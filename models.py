@@ -83,10 +83,22 @@ class Pedido(db.Model):
     __tablename__ = "pedidos"
     id = db.Column(db.Integer, primary_key=True)
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # estados: PENDIENTE_PAGO | PAGADO | RECHAZADO | EXPIRADO | ENVIADO | ENTREGADO
+    estado = db.Column(db.String(50), default="PENDIENTE_PAGO")
+    
     estado = db.Column(db.String(50), default="pendiente")
     usuario_id = db.Column(db.Integer, db.ForeignKey("usuarios.id"), nullable=False)
     total = db.Column(db.Float, default=0)
     costo_envio = db.Column(db.Float, default=0)
+
+    
+    # vencimiento de la reserva
+    expires_at = db.Column(db.DateTime, nullable=True)
+
+    # para evitar dobles devoluciones/descuentos
+    # reserved | released
+    stock_state = db.Column(db.String(20), default="reserved")
 
     detalles = db.relationship("PedidoDetalle", backref="pedido", lazy=True, passive_deletes=True)
 
