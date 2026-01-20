@@ -246,6 +246,7 @@ def listar_todos_productos():
 
 # Crear producto 
 @productos_bp.route("/", methods=["POST"])
+@jwt_required()
 def crear_producto():
     # Datos del formulario
     nombre = request.form.get("nombre")

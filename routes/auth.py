@@ -158,6 +158,9 @@ def protegido():
     usuario_id = get_jwt_identity()
     return jsonify({"mensaje": f"Acceso concedido al usuario {usuario_id}"})
 
+# -----------------------------------
+# FAVORITOS
+# -----------------------------------
 @auth_bp.route("/fav/<int:id>", methods=["POST"])
 @jwt_required()
 def agregarFavorito(id):
@@ -230,7 +233,6 @@ def eliminar_favorito(id):
 # -----------------------------------
 # CRUD
 # -----------------------------------
-
 #Listar usuarios
 @auth_bp.route("/listar", methods=["GET"])
 @jwt_required()
@@ -293,7 +295,6 @@ def listar_usuarios():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @auth_bp.route("/<int:id>", methods=["GET"])
 @jwt_required()

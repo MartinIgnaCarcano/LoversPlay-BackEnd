@@ -1,5 +1,6 @@
 from flask import Flask, jsonify
 from database import db
+import models
 from routes.categorias import categorias_bp
 from routes.productos import productos_bp
 from routes.pedidos import pedidos_bp
@@ -9,25 +10,40 @@ from routes.envios import envios_bp
 from datetime import timedelta
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
-from flask_mail import Mail
-import flask_jwt_extended
 import os
 from flask import request
 from services.email_service import send_email
 from extension import mail  
-print("VERSIÓN JWT:", flask_jwt_extended.__version__)
+from flask_migrate import Migrate
 
+
+def build_db_uri():
+    db_type = os.getenv("DB_TYPE", "mysql")  # mysql o sqlite (si querés fallback)
+    if db_type == "sqlite":
+        return "sqlite:///ecommerce.db"
+
+    user = os.getenv("DB_USER", "root")
+    password = os.getenv("DB_PASSWORD", "")  # en XAMPP root suele estar vacío
+    host = os.getenv("DB_HOST", "127.0.0.1")
+    port = os.getenv("DB_PORT", "3306")
+    name = os.getenv("DB_NAME", "ecommerce")
+
+    # PyMySQL driver
+    return f"mysql+pymysql://{user}:{password}@{host}:{port}/{name}?charset=utf8mb4"
 
 app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = "cambia-esto-por-un-secreto-seguro"  # usa variable de entorno en prod
-print("SECRET:", app.config['JWT_SECRET_KEY'])
 
 CORS(app, supports_credentials=True, origins=["http://localhost:3000", "*"])
 
 
-# Configuración de SQLite
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///ecommerce.db"
+# Configuración de MySQL
+app.config["SQLALCHEMY_DATABASE_URI"] = build_db_uri()
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_pre_ping": True,
+    "pool_recycle": 280,
+}
 
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(seconds=86400)  # expira en 1 hora
 
@@ -51,6 +67,7 @@ app.config["ADMIN_EMAIL"] = os.getenv("ADMIN_EMAIL")
 db.init_app(app)
 jwt = JWTManager(app)
 mail.init_app(app)
+migrate = Migrate(app, db)
 
 @jwt.expired_token_loader
 def expired_token_callback(jwt_header=None, jwt_payload=None):
@@ -99,9 +116,7 @@ app.register_blueprint(productos_bp)
 app.register_blueprint(pedidos_bp)
 app.register_blueprint(pagos_bp)
 app.register_blueprint(envios_bp)
-# Crear tablas al iniciar
-with app.app_context():
-    db.create_all()
+
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=5000)

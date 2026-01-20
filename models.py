@@ -58,16 +58,16 @@ class Producto(db.Model):
     nombre = db.Column(db.String(150), nullable=False)  # Corresponde a 'name'
     activo = db.Column(db.Boolean, default=True)
     slug = db.Column(db.String(150), unique=True, nullable=False) # Nuevo atributo para 'slug'
-    precio = db.Column(db.Float, nullable=False) # Corresponde a 'price'
+    precio = db.Column(db.Numeric(10,2), nullable=False) # Corresponde a 'price'
     descripcion_corta = db.Column(db.String(255)) # Nuevo atributo para 'shortDesc'
     descripcion_larga = db.Column(db.Text) # Corresponde a 'description'
     stock = db.Column(db.Integer, default=0) # Mantenido, corresponde a 'stock'
-    peso = db.Column(db.Float, default=0.4)  # en kg
+    peso = db.Column(db.Numeric(10,2), default=0.4)  # en kg
     url_imagen_principal = db.Column(db.String(200)) # Podría usarse para la imagen principal de 'images'
     categoria_id = db.Column(db.Integer, db.ForeignKey("categorias.id"))
     
     vistas = db.Column(db.Integer, default=0) # Nuevo atributo para 'views'
-    valoracion_promedio = db.Column(db.Float, default=0.0) # Nuevo atributo para 'rating'
+    valoracion_promedio = db.Column(db.Numeric(10,2), default=0.0) # Nuevo atributo para 'rating'
     
     imagenes = db.relationship("ImagenProducto", backref="producto", lazy=True, cascade="all, delete-orphan", passive_deletes=True,)
     resenas = db.relationship("Resena", backref="producto", lazy=True)
@@ -87,10 +87,9 @@ class Pedido(db.Model):
     # estados: PENDIENTE_PAGO | PAGADO | RECHAZADO | EXPIRADO | ENVIADO | ENTREGADO
     estado = db.Column(db.String(50), default="PENDIENTE_PAGO")
     
-    estado = db.Column(db.String(50), default="pendiente")
     usuario_id = db.Column(db.Integer, db.ForeignKey("usuarios.id"), nullable=False)
-    total = db.Column(db.Float, default=0)
-    costo_envio = db.Column(db.Float, default=0)
+    total = db.Column(db.Numeric(10,2), default=0)
+    costo_envio = db.Column(db.Numeric(10,2), default=0)
 
     
     # vencimiento de la reserva
@@ -108,7 +107,7 @@ class PedidoDetalle(db.Model):
     pedido_id = db.Column(db.Integer, db.ForeignKey("pedidos.id", ondelete="CASCADE"), nullable=False)
     producto_id = db.Column(db.Integer, db.ForeignKey("productos.id"), nullable=False)
     cantidad = db.Column(db.Integer, nullable=False)
-    subtotal = db.Column(db.Float, nullable=False)
+    subtotal = db.Column(db.Numeric(10,2), nullable=False)
     
     
 from datetime import datetime
@@ -134,7 +133,7 @@ class Pago(db.Model):
     metodo_pago = db.Column(db.String(50), nullable=True)    # ej: visa, master, account_money
     tipo_pago = db.Column(db.String(50), nullable=True)      # ej: credit_card, debit_card, ticket
 
-    monto = db.Column(db.Float, nullable=False)
+    monto = db.Column(db.Numeric(10,2), nullable=False)
     moneda = db.Column(db.String(10), default="ARS")
 
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
@@ -165,7 +164,7 @@ class ZonaEnvio(db.Model):
     cp_fin = db.Column(db.Integer, nullable=False)
 
     tipo_envio = db.Column(db.String(50), nullable=False)  # correo | viacargo | andesmar | cata
-    precio = db.Column(db.Float, nullable=False)
+    precio = db.Column(db.Numeric(10,2), nullable=False)
 
     activa = db.Column(db.Boolean, default=True)
     

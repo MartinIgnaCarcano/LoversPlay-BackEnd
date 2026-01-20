@@ -11,7 +11,7 @@ from services.notifications import (
 )
 
 pagos_bp = Blueprint("pagos", __name__, url_prefix="/api/pagos")
-sdk = mercadopago.SDK("APP_USR-8996751005930022-112715-9268db70d5e2dc631505b74a818b8481-2611950632")
+sdk = mercadopago.SDK(os.getenv("MP_ACCESS_TOKEN"))
 
 @pagos_bp.route("/webhook", methods=["POST", "GET"])
 def webhook_mp():
@@ -232,14 +232,14 @@ def crear_preferencia_pago():
         # =====================================================
         preference_data = {
             "items": mp_items,
-            "external_reference": str(pedido_id), 
+            "external_reference": str(pago_mp.id), 
             "back_urls": {
                 "success": "https://loversplay-six.vercel.app/pagos?status=success&pedido_id={pedido_id}",
                 "failure": "https://loversplay-six.vercel.app/pagos?status=failure",
                 "pending": "https://loversplay-six.vercel.app/pagos?status=pending&pedido_id={pedido_id}"
             },
             "auto_return": "approved",
-            "notification_url": "https://mckenzie-burthensome-denita.ngrok-free.dev/api/pagos/webhook",
+            "notification_url": os.getenv("MP_NOTIFICATION_URL"),
             "binary_mode": True
         }
         
