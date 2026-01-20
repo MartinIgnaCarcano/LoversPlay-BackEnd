@@ -59,7 +59,7 @@ class Producto(db.Model):
     activo = db.Column(db.Boolean, default=True)
     slug = db.Column(db.String(150), unique=True, nullable=False) # Nuevo atributo para 'slug'
     precio = db.Column(db.Numeric(10,2), nullable=False) # Corresponde a 'price'
-    descripcion_corta = db.Column(db.String(255)) # Nuevo atributo para 'shortDesc'
+    descripcion_corta = db.Column(db.Text) # Nuevo atributo para 'shortDesc'
     descripcion_larga = db.Column(db.Text) # Corresponde a 'description'
     stock = db.Column(db.Integer, default=0) # Mantenido, corresponde a 'stock'
     peso = db.Column(db.Numeric(10,2), default=0.4)  # en kg

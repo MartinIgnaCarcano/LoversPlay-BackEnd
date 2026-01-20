@@ -11,7 +11,7 @@ from services.notifications import (
 )
 
 pagos_bp = Blueprint("pagos", __name__, url_prefix="/api/pagos")
-sdk = mercadopago.SDK(os.getenv("MP_ACCESS_TOKEN"))
+sdk = mercadopago.SDK(str(os.getenv("MP_ACCESS_TOKEN")))
 
 @pagos_bp.route("/webhook", methods=["POST", "GET"])
 def webhook_mp():
