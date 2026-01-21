@@ -80,6 +80,7 @@ def expired_token_callback(jwt_header=None, jwt_payload=None):
 def invalid_token_callback(error):
     return jsonify({
         "error": "token_invalido",
+        "motivo": error,
         "mensaje": "El token enviado es inválido."
     }), 422
 

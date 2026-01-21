@@ -108,10 +108,10 @@ def crear_pedido():
             return jsonify({"error": "Faltan detalles del pedido"}), 400
 
         # 1) usuario logueado o invitado
-        usuario_id = get_jwt_identity()
-        usuario = None
+        identity = get_jwt_identity()   # None si no hay token
+        usuario_id = int(identity) if identity is not None else None
 
-        if not usuario_id:
+        if usuario_id is None:
             email = data.get("email")
             nombre = data.get("nombre", "Invitado")
             telefono = data.get("telefono")

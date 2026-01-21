@@ -8,7 +8,7 @@ from sqlalchemy import desc
 
 productos_bp = Blueprint("productos", __name__, url_prefix="/api/productos")
 
-UPLOAD_FOLDER = "static/imagenes/productos"
+UPLOAD_FOLDER = "static/uploads"
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif"}
 
 def allowed_file(filename):
