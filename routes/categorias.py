@@ -23,12 +23,14 @@ def crear_categoria():
     try:
         nombre = request.form.get("nombre")
         slug = request.form.get("slug")
+        icon_key = request.form.get("icon_key")
         if not nombre:
             return jsonify({"msg": "Falta nombre"}), 400
         if not slug:
             return jsonify({"msg": "Falta el slug"}),400
-        
-        categoria = Categoria(nombre=nombre, slug=slug)
+        if not icon_key:
+            return jsonify({"msg": "Falta el icon_key"}),400
+        categoria = Categoria(nombre=nombre, slug=slug, icon_key=icon_key)
         
         db.session.add(categoria)
         db.session.flush()  
@@ -56,12 +58,13 @@ def listar_categorias():
                 Categoria.id,
                 Categoria.nombre,
                 Categoria.url_imagen,
+                Categoria.icon_key,
                 func.count(Producto.id).label("cantidad_productos")
             )
             .outerjoin(Producto, Categoria.id == Producto.categoria_id)
             .group_by(Categoria.id)
             .order_by(func.count(Producto.id).desc())  # 🔽 de mayor a menor
-            .all()
+            .limit(8)
         )
 
         data = [
@@ -69,7 +72,8 @@ def listar_categorias():
                 "id": c.id,
                 "nombre": c.nombre,
                 "url_imagen": c.url_imagen,
-                "cantidad_productos": c.cantidad_productos
+                "cantidad_productos": c.cantidad_productos,
+                "icon_key": c.icon_key
             }
             for c in categorias
         ]
@@ -85,7 +89,7 @@ def listar_categorias():
 def detalle_categoria(id):
     try:
         c = Categoria.query.get_or_404(id)
-        return jsonify({"id": c.id, "nombre": c.nombre, "url_imagen": c.url_imagen, "slug": c.slug})
+        return jsonify({"id": c.id, "nombre": c.nombre, "url_imagen": c.url_imagen, "slug": c.slug, "icon_key": c.icon_key})
     except Exception as e:
         db.session.rollback()
         print("ERROR:", repr(e))
@@ -100,7 +104,11 @@ def actualizar_categoria(id):
         nombre = request.form.get("nombre")
         if nombre:
             c.nombre = nombre
-
+            
+        icon_key = request.form.get("icon_key")
+        if icon_key:
+            c.icon_key = icon_key
+            
         if "imagen" in request.files:
             file = request.files["imagen"]
             if file and allowed_file(file.filename):

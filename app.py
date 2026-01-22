@@ -45,7 +45,7 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 280,
 }
 
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(seconds=86400)  # expira en 1 hora
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(seconds=3600)  # expira en 1 hora
 
 # ====== MAIL CONFIG (BREVO) ======
 app.config["MAIL_SERVER"] = os.getenv("MAIL_SERVER", "smtp-relay.brevo.com")

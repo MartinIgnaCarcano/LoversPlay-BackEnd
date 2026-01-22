@@ -51,6 +51,7 @@ class Categoria(db.Model):
     nombre = db.Column(db.String(100), nullable=False)
     url_imagen = db.Column(db.String(200))
     slug = db.Column(db.String(150), nullable=True) # Nuevo atributo para 'slug'
+    icon_key = db.Column(db.String(150), nullable=False)
 
 class Producto(db.Model):
     __tablename__ = "productos"
