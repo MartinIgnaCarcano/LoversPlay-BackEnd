@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify, current_app
 from werkzeug.utils import secure_filename
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, Categoria, Producto
-from sqlalchemy import func
+from sqlalchemy import func, distinct
 
 categorias_bp = Blueprint("categorias", __name__, url_prefix="/api/categorias")
 
@@ -59,12 +59,15 @@ def listar_categorias():
                 Categoria.nombre,
                 Categoria.url_imagen,
                 Categoria.icon_key,
-                func.count(Producto.id).label("cantidad_productos")
+                func.count(distinct(Producto.id)).label("cantidad_productos")
             )
-            .outerjoin(Producto, Categoria.id == Producto.categoria_id)
-            .group_by(Categoria.id)
-            .order_by(func.count(Producto.id).desc())  # 🔽 de mayor a menor
-            .limit(8)
+            # join por relación many-to-many
+            .outerjoin(Categoria.productos)  # equivalente a join pivote + productos
+            # si querés contar solo los productos visibles
+            .filter((Producto.activo == True) | (Producto.id == None))
+            .group_by(Categoria.id, Categoria.nombre, Categoria.url_imagen, Categoria.icon_key)
+            .order_by(func.count(distinct(Producto.id)).desc())
+            .all()
         )
 
         data = [
@@ -72,17 +75,18 @@ def listar_categorias():
                 "id": c.id,
                 "nombre": c.nombre,
                 "url_imagen": c.url_imagen,
-                "cantidad_productos": c.cantidad_productos,
+                "cantidad_productos": int(c.cantidad_productos or 0),
                 "icon_key": c.icon_key
             }
             for c in categorias
         ]
 
-        return jsonify(data)
+        return jsonify(data), 200
+
     except Exception as e:
         db.session.rollback()
         print("ERROR:", repr(e))
-        return jsonify({"error": "Error interno"}), 500
+        return jsonify({"error": "Error interno", "details": str(e)}), 500
     
 # Obtener una categoría
 @categorias_bp.route("/<int:id>", methods=["GET"])

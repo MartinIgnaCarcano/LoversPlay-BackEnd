@@ -1,10 +1,10 @@
 import os
 from flask import Blueprint, json, request, jsonify
-from models import ImagenProducto, Producto, Usuario
+from models import ImagenProducto, Producto, Usuario, Categoria, Pedido, PedidoDetalle
 from werkzeug.utils import secure_filename
 from database import db
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from sqlalchemy import desc
+from sqlalchemy import desc, asc, func
 
 productos_bp = Blueprint("productos", __name__, url_prefix="/api/productos")
 
@@ -48,80 +48,70 @@ def require_admin():
 #REVISAR-----v
 
 @productos_bp.route("/", methods=["GET"])
-def listar_todos_productos():
-    try:
-        page = int(request.args.get("page", 1))
-        per_page = int(request.args.get("per_page", 10))
-        offset_value = (page - 1) * per_page
-
-        include_inactive = request.args.get("include_inactive", "false").lower() == "true"
-
-        query = Producto.query.filter(Producto.activo == True)
-
-        productos = (
-            query
-            .order_by(desc(Producto.vistas * 0.7 + Producto.valoracion_promedio * 0.3))
-            .limit(per_page)
-            .offset(offset_value)
-            .all()
-        )
-
-        total = query.count()
-
-        return jsonify({
-            "page": page,
-            "per_page": per_page,
-            "total": total,
-            "productos": [
-                {
-                    "id": p.id,
-                    "nombre": p.nombre,
-                    "precio": p.precio,
-                    "url_imagen_principal": p.url_imagen_principal,
-                    "url_imagen_secundaria": p.imagenes[0].url_imagen if p.imagenes else None,
-                    "stock": p.stock,
-                    "vistas": p.vistas,
-                    "valoracion_promedio": p.valoracion_promedio,
-                    "activo": p.activo,  # ✅ útil para admin/front
-                }
-                for p in productos
-            ]
-        })
-    except Exception as e:
-        return jsonify({"msg": "Error al listar productos", "error": str(e)}), 500
-
-@productos_bp.route("/por_categoria", methods=["GET"])
 def listar_productos():
     try:
-        # Leer categorías de la query (?ids=1,2,3)
-        ids_param = request.args.get("ids")
-        if not ids_param:
-            return jsonify({"msg": "Debe indicar al menos una categoría"}), 400
-
-        categoria_ids = [int(cid) for cid in ids_param.split(",") if cid.isdigit()]
-
-        if not categoria_ids:
-            return jsonify({"msg": "IDs de categoría inválidos"}), 400
-
-        # Paginación
         page = int(request.args.get("page", 1))
-        per_page = int(request.args.get("per_page", 10))
+        per_page = int(request.args.get("per_page", 16))
         offset_value = (page - 1) * per_page
 
-        productos = (
-            Producto.query
-            .filter(Producto.categoria_id.in_(categoria_ids))
-            .filter(Producto.activo == True)   # ✅
-            .order_by(desc(Producto.vistas * 0.7 + Producto.valoracion_promedio * 0.3))
-            .limit(per_page)
-            .offset(offset_value)
-            .all()
-        )
+        categoria_ids_raw = (request.args.get("categoria_ids") or "").strip()
+        in_stock = (request.args.get("in_stock") or "false").lower() == "true"
+        sort = (request.args.get("sort") or "relevance").strip()
 
-        total = Producto.query.filter(
-            Producto.categoria_id.in_(categoria_ids),
-            Producto.activo == True           # ✅
-        ).count()
+        # Base query
+        query = Producto.query.filter(Producto.activo == True)
+
+        # Stock disponible
+        if in_stock:
+            query = query.filter(Producto.stock > 0)
+
+        # Filtro por categorías (ANY)
+        if categoria_ids_raw:
+            categoria_ids = [int(x) for x in categoria_ids_raw.split(",") if x.strip().isdigit()]
+            if categoria_ids:
+                query = (
+                    query.join(Producto.categorias)
+                         .filter(Categoria.id.in_(categoria_ids))
+                         .distinct()
+                )
+
+        # -------------------
+        # ORDENAMIENTO
+        # -------------------
+        if sort == "price_asc":
+            query = query.order_by(asc(Producto.precio))
+
+        elif sort == "price_desc":
+            query = query.order_by(desc(Producto.precio))
+
+        elif sort == "most_viewed":
+            query = query.order_by(desc(Producto.vistas))
+
+        elif sort == "best_selling":
+            vendidos_subq = (
+                db.session.query(
+                    PedidoDetalle.producto_id.label("pid"),
+                    func.coalesce(func.sum(PedidoDetalle.cantidad), 0).label("vendidos")
+                )
+                .join(Pedido, Pedido.id == PedidoDetalle.pedido_id)
+                .filter(Pedido.estado.in_(["pagado", "aprobado", "entregado"]))  # <-- AJUSTAR
+                .group_by(PedidoDetalle.producto_id)
+                .subquery()
+            )
+
+            query = (
+                query.outerjoin(vendidos_subq, vendidos_subq.c.pid == Producto.id)
+                     .order_by(desc(func.coalesce(vendidos_subq.c.vendidos, 0)))
+            )
+
+        else:
+            query = query.order_by(desc(Producto.vistas * 0.7 + Producto.valoracion_promedio * 0.3))
+
+        # Total para paginación
+        total = query.count()
+
+        # Paginado
+        productos = query.limit(per_page).offset(offset_value).all()
 
         return jsonify({
             "page": page,
@@ -131,17 +121,18 @@ def listar_productos():
                 {
                     "id": p.id,
                     "nombre": p.nombre,
-                    "precio": p.precio,
-                    "activo": p.activo,
-                    "url_imagen_principal": p.url_imagen_principal,
+                    "precio": float(p.precio) if p.precio is not None else 0,
+                    "url_imagen_principal": "http://localhost:8000/"+p.url_imagen_principal,
                     "url_imagen_secundaria": p.imagenes[0].url_imagen if p.imagenes else None,
                     "stock": p.stock,
                     "vistas": p.vistas,
-                    "valoracion_promedio": p.valoracion_promedio,
+                    "valoracion_promedio": float(p.valoracion_promedio) if p.valoracion_promedio is not None else 0,
+                    "categoria_ids": [c.id for c in p.categorias],
                 }
                 for p in productos
             ]
-        })
+        }), 200
+
     except Exception as e:
         return jsonify({"msg": "Error al listar productos", "error": str(e)}), 500
 
@@ -180,16 +171,16 @@ def detalle_producto(id):
         p.vistas += 1
         db.session.commit()
         # --- Obtener sugerencias ---
+        cat_ids = [c.id for c in p.categorias]
+
         sugeridos = (
-            Producto.query
-            .filter(
-                Producto.categoria_id == p.categoria_id,
-                Producto.id != p.id,
-                Producto.activo == True  # ✅
-            )
-            .order_by(Producto.vistas.desc(), Producto.valoracion_promedio.desc())
-            .limit(8)
-            .all()
+        Producto.query
+        .join(Producto.categorias)
+        .filter(Categoria.id.in_(cat_ids), Producto.id != p.id, Producto.activo == True)
+        .distinct()
+        .order_by(Producto.vistas.desc(), Producto.valoracion_promedio.desc())
+        .limit(8)
+        .all()
         )
 
         sugeridos_data = [
@@ -445,3 +436,109 @@ def eliminar_producto(id):
         print("ERROR:", repr(e))
         return jsonify({"error": "Error interno"}), 500
 
+from sqlalchemy import text
+from flask import jsonify
+
+@productos_bp.route("/reparar_textos", methods=["POST"])
+def reparar_textos():
+    # Traemos columnas reales
+    rows = db.session.execute(text("""
+        SELECT id, nombre, descripcion_corta, descripcion_larga, extra
+        FROM productos
+    """)).mappings().all()
+
+    corregidos = 0
+    ids_corregidos = []
+
+    for r in rows:
+        pid = r["id"]
+
+        nombre = fix_encoding(r["nombre"])
+        corta = fix_encoding(r["descripcion_corta"])
+        larga = fix_encoding(r["descripcion_larga"])
+        extra = fix_encoding(r["extra"])
+
+        # Solo update si cambió algo (evita writes innecesarios)
+        if (nombre != r["nombre"] or corta != r["descripcion_corta"] or
+            larga != r["descripcion_larga"] or extra != r["extra"]):
+
+            db.session.execute(text("""
+                UPDATE productos
+                SET nombre = :nombre,
+                    descripcion_corta = :corta,
+                    descripcion_larga = :larga,
+                    extra = :extra
+                WHERE id = :id
+            """), {
+                "id": pid,
+                "nombre": nombre,
+                "corta": corta,
+                "larga": larga,
+                "extra": extra
+            })
+
+            corregidos += 1
+            ids_corregidos.append(pid)
+
+    db.session.commit()
+
+    return jsonify({
+        "productos_corregidos": ids_corregidos,
+        "total_corregidos": corregidos
+    }), 200
+
+
+# @productos_bp.route("/por_categoria", methods=["GET"])
+# def listar_productos():
+#     try:
+#         # Leer categorías de la query (?ids=1,2,3)
+#         ids_param = request.args.get("ids")
+#         if not ids_param:
+#             return jsonify({"msg": "Debe indicar al menos una categoría"}), 400
+
+#         categoria_ids = [int(cid) for cid in ids_param.split(",") if cid.isdigit()]
+
+#         if not categoria_ids:
+#             return jsonify({"msg": "IDs de categoría inválidos"}), 400
+
+#         # Paginación
+#         page = int(request.args.get("page", 1))
+#         per_page = int(request.args.get("per_page", 10))
+#         offset_value = (page - 1) * per_page
+
+#         productos = (
+#             Producto.query
+#             .filter(Producto.categoria_id.in_(categoria_ids))
+#             .filter(Producto.activo == True)   # ✅
+#             .order_by(desc(Producto.vistas * 0.7 + Producto.valoracion_promedio * 0.3))
+#             .limit(per_page)
+#             .offset(offset_value)
+#             .all()
+#         )
+
+#         total = Producto.query.filter(
+#             Producto.categoria_id.in_(categoria_ids),
+#             Producto.activo == True           # ✅
+#         ).count()
+
+#         return jsonify({
+#             "page": page,
+#             "per_page": per_page,
+#             "total": total,
+#             "productos": [
+#                 {
+#                     "id": p.id,
+#                     "nombre": p.nombre,
+#                     "precio": p.precio,
+#                     "activo": p.activo,
+#                     "url_imagen_principal": p.url_imagen_principal,
+#                     "url_imagen_secundaria": p.imagenes[0].url_imagen if p.imagenes else None,
+#                     "stock": p.stock,
+#                     "vistas": p.vistas,
+#                     "valoracion_promedio": p.valoracion_promedio,
+#                 }
+#                 for p in productos
+#             ]
+#         })
+#     except Exception as e:
+#         return jsonify({"msg": "Error al listar productos", "error": str(e)}), 500

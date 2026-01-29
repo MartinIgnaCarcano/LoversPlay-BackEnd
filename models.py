@@ -45,6 +45,12 @@ class Favorito(db.Model):
     
     producto = db.relationship("Producto", backref="favoritos", lazy=True)
 
+producto_categoria = db.Table(
+    "producto_categoria",
+    db.Column("producto_id", db.Integer, db.ForeignKey("productos.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("categoria_id", db.Integer, db.ForeignKey("categorias.id", ondelete="CASCADE"), primary_key=True),
+)
+
 class Categoria(db.Model):
     __tablename__ = "categorias"
     id = db.Column(db.Integer, primary_key=True)
@@ -52,6 +58,13 @@ class Categoria(db.Model):
     url_imagen = db.Column(db.String(200))
     slug = db.Column(db.String(150), nullable=True) # Nuevo atributo para 'slug'
     icon_key = db.Column(db.String(150), nullable=False)
+    
+    productos = db.relationship(
+        "Producto",
+        secondary=producto_categoria,
+        back_populates="categorias",
+        lazy="selectin",
+    )
 
 class Producto(db.Model):
     __tablename__ = "productos"
@@ -65,11 +78,12 @@ class Producto(db.Model):
     stock = db.Column(db.Integer, default=0) # Mantenido, corresponde a 'stock'
     peso = db.Column(db.Numeric(10,2), default=0.4)  # en kg
     url_imagen_principal = db.Column(db.String(200)) # Podría usarse para la imagen principal de 'images'
-    categoria_id = db.Column(db.Integer, db.ForeignKey("categorias.id"))
+    extra = db.Column(db.Text) #Medidas, Detalles importantes
     
     vistas = db.Column(db.Integer, default=0) # Nuevo atributo para 'views'
     valoracion_promedio = db.Column(db.Numeric(10,2), default=0.0) # Nuevo atributo para 'rating'
     
+    categorias = db.relationship("Categoria", secondary=producto_categoria, back_populates="productos", lazy="selectin")
     imagenes = db.relationship("ImagenProducto", backref="producto", lazy=True, cascade="all, delete-orphan", passive_deletes=True,)
     resenas = db.relationship("Resena", backref="producto", lazy=True)
     detalles_pedido = db.relationship("PedidoDetalle", backref="producto", lazy=True)
@@ -109,7 +123,6 @@ class PedidoDetalle(db.Model):
     producto_id = db.Column(db.Integer, db.ForeignKey("productos.id"), nullable=False)
     cantidad = db.Column(db.Integer, nullable=False)
     subtotal = db.Column(db.Numeric(10,2), nullable=False)
-    
     
 from datetime import datetime
 

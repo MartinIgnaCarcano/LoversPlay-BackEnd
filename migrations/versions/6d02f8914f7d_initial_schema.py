@@ -1,8 +1,8 @@
-"""init mysql
+"""initial schema
 
-Revision ID: 7bac4bf8eb60
+Revision ID: 6d02f8914f7d
 Revises: 
-Create Date: 2026-01-20 11:49:20.525202
+Create Date: 2026-01-28 14:30:17.037367
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '7bac4bf8eb60'
+revision = '6d02f8914f7d'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -23,7 +23,25 @@ def upgrade():
     sa.Column('nombre', sa.String(length=100), nullable=False),
     sa.Column('url_imagen', sa.String(length=200), nullable=True),
     sa.Column('slug', sa.String(length=150), nullable=True),
+    sa.Column('icon_key', sa.String(length=150), nullable=False),
     sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('productos',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('nombre', sa.String(length=150), nullable=False),
+    sa.Column('activo', sa.Boolean(), nullable=True),
+    sa.Column('slug', sa.String(length=150), nullable=False),
+    sa.Column('precio', sa.Numeric(precision=10, scale=2), nullable=False),
+    sa.Column('descripcion_corta', sa.Text(), nullable=True),
+    sa.Column('descripcion_larga', sa.Text(), nullable=True),
+    sa.Column('stock', sa.Integer(), nullable=True),
+    sa.Column('peso', sa.Numeric(precision=10, scale=2), nullable=True),
+    sa.Column('url_imagen_principal', sa.String(length=200), nullable=True),
+    sa.Column('extra', sa.Text(), nullable=True),
+    sa.Column('vistas', sa.Integer(), nullable=True),
+    sa.Column('valoracion_promedio', sa.Numeric(precision=10, scale=2), nullable=True),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('slug')
     )
     op.create_table('usuarios',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -43,7 +61,7 @@ def upgrade():
     sa.Column('cp_inicio', sa.Integer(), nullable=False),
     sa.Column('cp_fin', sa.Integer(), nullable=False),
     sa.Column('tipo_envio', sa.String(length=50), nullable=False),
-    sa.Column('precio', sa.Float(), nullable=False),
+    sa.Column('precio', sa.Numeric(precision=10, scale=2), nullable=False),
     sa.Column('activa', sa.Boolean(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
@@ -61,36 +79,6 @@ def upgrade():
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('usuario_id')
     )
-    op.create_table('pedidos',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('fecha', sa.DateTime(), nullable=True),
-    sa.Column('estado', sa.String(length=50), nullable=True),
-    sa.Column('usuario_id', sa.Integer(), nullable=False),
-    sa.Column('total', sa.Float(), nullable=True),
-    sa.Column('costo_envio', sa.Float(), nullable=True),
-    sa.Column('expires_at', sa.DateTime(), nullable=True),
-    sa.Column('stock_state', sa.String(length=20), nullable=True),
-    sa.ForeignKeyConstraint(['usuario_id'], ['usuarios.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_table('productos',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('nombre', sa.String(length=150), nullable=False),
-    sa.Column('activo', sa.Boolean(), nullable=True),
-    sa.Column('slug', sa.String(length=150), nullable=False),
-    sa.Column('precio', sa.Float(), nullable=False),
-    sa.Column('descripcion_corta', sa.String(length=255), nullable=True),
-    sa.Column('descripcion_larga', sa.Text(), nullable=True),
-    sa.Column('stock', sa.Integer(), nullable=True),
-    sa.Column('peso', sa.Float(), nullable=True),
-    sa.Column('url_imagen_principal', sa.String(length=200), nullable=True),
-    sa.Column('categoria_id', sa.Integer(), nullable=True),
-    sa.Column('vistas', sa.Integer(), nullable=True),
-    sa.Column('valoracion_promedio', sa.Float(), nullable=True),
-    sa.ForeignKeyConstraint(['categoria_id'], ['categorias.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('slug')
-    )
     op.create_table('favoritos',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('usuario_id', sa.Integer(), nullable=False),
@@ -107,6 +95,36 @@ def upgrade():
     sa.ForeignKeyConstraint(['producto_id'], ['productos.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_table('pedidos',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('fecha', sa.DateTime(), nullable=True),
+    sa.Column('estado', sa.String(length=50), nullable=True),
+    sa.Column('usuario_id', sa.Integer(), nullable=False),
+    sa.Column('total', sa.Numeric(precision=10, scale=2), nullable=True),
+    sa.Column('costo_envio', sa.Numeric(precision=10, scale=2), nullable=True),
+    sa.Column('expires_at', sa.DateTime(), nullable=True),
+    sa.Column('stock_state', sa.String(length=20), nullable=True),
+    sa.ForeignKeyConstraint(['usuario_id'], ['usuarios.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('producto_categoria',
+    sa.Column('producto_id', sa.Integer(), nullable=False),
+    sa.Column('categoria_id', sa.Integer(), nullable=False),
+    sa.ForeignKeyConstraint(['categoria_id'], ['categorias.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['producto_id'], ['productos.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('producto_id', 'categoria_id')
+    )
+    op.create_table('resenas',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('producto_id', sa.Integer(), nullable=False),
+    sa.Column('usuario_id', sa.Integer(), nullable=False),
+    sa.Column('puntaje', sa.Integer(), nullable=False),
+    sa.Column('comentario', sa.Text(), nullable=True),
+    sa.Column('fecha', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['producto_id'], ['productos.id'], ),
+    sa.ForeignKeyConstraint(['usuario_id'], ['usuarios.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('pagos',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('pedido_id', sa.Integer(), nullable=False),
@@ -119,7 +137,7 @@ def upgrade():
     sa.Column('detalle_estado', sa.String(length=100), nullable=True),
     sa.Column('metodo_pago', sa.String(length=50), nullable=True),
     sa.Column('tipo_pago', sa.String(length=50), nullable=True),
-    sa.Column('monto', sa.Float(), nullable=False),
+    sa.Column('monto', sa.Numeric(precision=10, scale=2), nullable=False),
     sa.Column('moneda', sa.String(length=10), nullable=True),
     sa.Column('fecha_creacion', sa.DateTime(), nullable=True),
     sa.Column('fecha_actualizacion', sa.DateTime(), nullable=True),
@@ -136,20 +154,9 @@ def upgrade():
     sa.Column('pedido_id', sa.Integer(), nullable=False),
     sa.Column('producto_id', sa.Integer(), nullable=False),
     sa.Column('cantidad', sa.Integer(), nullable=False),
-    sa.Column('subtotal', sa.Float(), nullable=False),
+    sa.Column('subtotal', sa.Numeric(precision=10, scale=2), nullable=False),
     sa.ForeignKeyConstraint(['pedido_id'], ['pedidos.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['producto_id'], ['productos.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_table('resenas',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('producto_id', sa.Integer(), nullable=False),
-    sa.Column('usuario_id', sa.Integer(), nullable=False),
-    sa.Column('puntaje', sa.Integer(), nullable=False),
-    sa.Column('comentario', sa.Text(), nullable=True),
-    sa.Column('fecha', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['producto_id'], ['productos.id'], ),
-    sa.ForeignKeyConstraint(['usuario_id'], ['usuarios.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     # ### end Alembic commands ###
@@ -157,15 +164,16 @@ def upgrade():
 
 def downgrade():
     # ### commands auto generated by Alembic - please adjust! ###
-    op.drop_table('resenas')
     op.drop_table('pedido_detalle')
     op.drop_table('pagos')
+    op.drop_table('resenas')
+    op.drop_table('producto_categoria')
+    op.drop_table('pedidos')
     op.drop_table('imagenes_productos')
     op.drop_table('favoritos')
-    op.drop_table('productos')
-    op.drop_table('pedidos')
     op.drop_table('direcciones')
     op.drop_table('zonas_envio')
     op.drop_table('usuarios')
+    op.drop_table('productos')
     op.drop_table('categorias')
     # ### end Alembic commands ###
