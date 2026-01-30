@@ -83,7 +83,10 @@ def listar_productos():
 
         elif sort == "price_desc":
             query = query.order_by(desc(Producto.precio))
-
+        
+        elif sort == "newest":
+            query = query.order_by(desc(Producto.fecha_creacion))
+                
         elif sort == "most_viewed":
             query = query.order_by(desc(Producto.vistas))
 

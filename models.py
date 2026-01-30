@@ -80,6 +80,9 @@ class Producto(db.Model):
     url_imagen_principal = db.Column(db.String(200)) # Podría usarse para la imagen principal de 'images'
     extra = db.Column(db.Text) #Medidas, Detalles importantes
     
+    fecha_creacion = db.Column(db.DateTime, nullable=True)
+    fecha_modificacion = db.Column(db.DateTime, nullable=True)
+    
     vistas = db.Column(db.Integer, default=0) # Nuevo atributo para 'views'
     valoracion_promedio = db.Column(db.Numeric(10,2), default=0.0) # Nuevo atributo para 'rating'
     
