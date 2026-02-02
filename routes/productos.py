@@ -63,7 +63,7 @@ def listar_productos():
         en_stock = request.args.get("en_stock", "0")
         sort = request.args.get("sort", "views")
 
-        categorias_param = request.args.get("categorias")  # ej: "1,2,3"
+        categorias_param = request.args.get("categoria_ids")  # ej: "1,2,3"
 
         # ------------------------
         # Query base
@@ -117,31 +117,39 @@ def listar_productos():
         # Paginado
         # ------------------------
         pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-
-        data = [
-            {
-                "id": p.id,
-                "nombre": p.nombre,
-                "extra": p.extra,
-                "precio": float(p.precio),
-                "stock": p.stock,
-                "slug": p.slug,
-                "url_imagen_principal": preUrl + p.url_imagen_principal,
-                "url_imagen_secundaria": preUrl + p.imagenes[0].url_imagen if p.imagenes else None,
-                "categorias": [
-                    {"id": c.id, "nombre": c.nombre, "slug": c.slug}
-                    for c in p.categorias
-                ]
-            }
-            for p in pagination.items
-        ]
+        productos = pagination.items
 
         return jsonify({
-            "items": data,
             "page": page,
+            "per_page": per_page,
             "total": pagination.total,
-            "pages": pagination.pages
-        })
+            "pages": pagination.pages,
+
+            # ✅ volvemos a lo que el front espera
+            "productos": [
+                {
+                    "id": p.id,
+                    "nombre": p.nombre,
+                    "precio": float(p.precio) if p.precio is not None else 0,
+                    "url_imagen_principal": (preUrl + p.url_imagen_principal) if p.url_imagen_principal else None,
+                    "url_imagen_secundaria": (preUrl + p.imagenes[0].url_imagen) if p.imagenes else None,
+                    "stock": p.stock,
+                    "vistas": p.vistas,
+                    "valoracion_promedio": float(p.valoracion_promedio) if p.valoracion_promedio is not None else 0,
+                    "categoria_ids": [c.id for c in (p.categorias or [])],
+                }
+                for p in productos
+            ],
+
+            # (opcional) si querés mantener compat o debug:
+            # "filters_applied": {
+            #     "categoria_ids": categoria_ids,
+            #     "in_stock": in_stock,
+            #     "min_price": min_price,
+            #     "max_price": max_price,
+            #     "sort": sort,
+            # }
+        }), 200
 
     except Exception as e:
         return jsonify({"msg": "Error interno", "error": str(e)}), 500
