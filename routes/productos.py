@@ -110,6 +110,11 @@ def listar_productos():
             query = query.order_by(Producto.precio.desc())
         elif sort == "rating":
             query = query.order_by(desc(Producto.valoracion_promedio))
+        elif sort == "newest":
+            query = query.order_by(
+                desc(Producto.fecha_creacion),
+                desc(Producto.id)
+            )
         else:
             query = query.order_by(desc(Producto.vistas))
 
