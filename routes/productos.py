@@ -136,6 +136,7 @@ def listar_productos():
                     "id": p.id,
                     "nombre": p.nombre,
                     "precio": float(p.precio) if p.precio is not None else 0,
+                    "extra": p.extra,
                     "url_imagen_principal": (preUrl + p.url_imagen_principal) if p.url_imagen_principal else None,
                     "url_imagen_secundaria": (preUrl + p.imagenes[0].url_imagen) if p.imagenes else None,
                     "stock": p.stock,
@@ -300,6 +301,7 @@ def buscar_por_nombre():
                 {
                     "id": p.id,
                     "nombre": p.nombre,
+                    "extra": p.extra,
                     "precio": p.precio,
                     "url_imagen_principal": p.url_imagen_principal,
                     "url_imagen_secundaria": p.imagenes[0].url_imagen if p.imagenes else None,
@@ -318,6 +320,7 @@ def buscar_por_nombre():
 #------ADMIN-------
 #------------------
 # Crear producto 
+# Crear producto 
 @productos_bp.route("/", methods=["POST"])
 @jwt_required()
 def crear_producto():
@@ -332,9 +335,18 @@ def crear_producto():
         precio = request.form.get("precio", type=float)
         stock = request.form.get("stock", type=int, default=0)
         peso = request.form.get("peso")
+
+        # ✅ NUEVO: extra
+        extra = request.form.get("extra")
+
+        # ⚠️ legacy (si todavía lo usás en algo)
         categoria_id = request.form.get("categoria_id", type=int)
+
+        # ✅ NUEVO: categoria_ids (CSV: "1,2,3")
+        categoria_ids_raw = request.form.get("categoria_ids", "")
+
         slug = request.form.get("slug")
-        
+
         producto = Producto(
             nombre=nombre,
             descripcion_corta=descripcion_corta,
@@ -342,7 +354,8 @@ def crear_producto():
             precio=precio,
             stock=stock,
             peso=peso,
-            categoria_id=categoria_id,
+            extra=extra,                # ✅
+            categoria_id=categoria_id,  # legacy (opcional)
             slug=slug,
             vistas=0,
             valoracion_promedio=0.0,
@@ -351,15 +364,36 @@ def crear_producto():
         db.session.add(producto)
         db.session.flush()  # Genera el id del producto sin hacer commit
 
+        # ✅ ASIGNAR CATEGORÍAS N:N
+        # Si viene categoria_ids lo usamos; sino fallback a categoria_id (legacy)
+        categoria_ids = []
+        if categoria_ids_raw:
+            categoria_ids = [
+                int(x) for x in categoria_ids_raw.split(",")
+                if x.strip().isdigit()
+            ]
+
+        if categoria_ids:
+            cats = Categoria.query.filter(Categoria.id.in_(categoria_ids)).all()
+            producto.categorias = cats
+        elif categoria_id:
+            cat = Categoria.query.get(categoria_id)
+            if cat:
+                producto.categorias = [cat]
+
+        # Imagen principal
         if "imagen_principal" in request.files:
             file = request.files["imagen_principal"]
             if file and allowed_file(file.filename):
-                filename = secure_filename(nombreArchivoFinal(file.filename, producto.nombre, producto.id, "principal"))
+                filename = secure_filename(
+                    nombreArchivoFinal(file.filename, producto.nombre, producto.id, "principal")
+                )
                 filepath = os.path.join(UPLOAD_FOLDER, filename)
                 file.save(filepath)
                 producto.url_imagen_principal = f"/{filepath}"
             else:
                 return jsonify({"msg": "Archivo de imagen principal no permitido"}), 400
+
         # Archivos
         if "imagenes" in request.files:
             files = request.files.getlist("imagenes")
@@ -387,6 +421,8 @@ def crear_producto():
         print("ERROR:", repr(e))
         return jsonify({"error": "Error interno"}), 500
 
+
+# Actualizar producto (ADMIN)
 # Actualizar producto (ADMIN)
 @productos_bp.route("/<int:id>", methods=["PATCH"])
 @jwt_required()
@@ -420,6 +456,23 @@ def actualizar_producto(id):
         if "peso" in form:
             producto.peso = float(form.get("peso"))
 
+        # ✅ NUEVO: extra
+        if "extra" in form:
+            producto.extra = form.get("extra")
+
+        # ✅ NUEVO: categoria_ids (CSV)
+        if "categoria_ids" in form:
+            raw = form.get("categoria_ids") or ""
+            categoria_ids = [int(x) for x in raw.split(",") if x.strip().isdigit()]
+
+            if categoria_ids:
+                cats = Categoria.query.filter(Categoria.id.in_(categoria_ids)).all()
+                producto.categorias = cats
+            else:
+                # si viene vacío, limpiamos categorías
+                producto.categorias = []
+
+        # ⚠️ legacy: si todavía te llega categoria_id, lo mantenemos
         if "categoria_id" in form:
             producto.categoria_id = int(form.get("categoria_id"))
 
@@ -458,6 +511,7 @@ def actualizar_producto(id):
         db.session.rollback()
         print("ERROR:", repr(e))
         return jsonify({"error": "Error interno"}), 500
+
     
 # Eliminar producto (ADMIN)
 @productos_bp.route("/<int:id>", methods=["DELETE"])

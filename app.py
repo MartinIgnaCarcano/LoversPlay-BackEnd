@@ -34,7 +34,13 @@ def build_db_uri():
 app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = "cambia-esto-por-un-secreto-seguro"  # usa variable de entorno en prod
 
-CORS(app, supports_credentials=True, origins=["http://localhost:3000", "*"])
+CORS(
+  app,
+  supports_credentials=True,
+  resources={r"/api/*": {"origins": ["http://localhost:8000", "http://localhost:3000"]}},
+  allow_headers=["Content-Type", "Authorization"],
+  methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+)
 
 
 # Configuración de MySQL
