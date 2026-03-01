@@ -316,6 +316,44 @@ def buscar_por_nombre():
     except Exception as e:
         return jsonify({"msg": "Error al listar productos", "error": str(e)}), 500
 
+
+@productos_bp.route("/stock/check", methods=["POST"])
+def check_stock():
+    try:
+        
+        data = request.get_json() or {}
+        items = data.get("items") or []
+
+        if not isinstance(items, list) or len(items) == 0:
+            return jsonify({"ok": False, "error": "items inválido"}), 400
+
+        ids = []
+        req_map = {}
+        for i in items:
+            try:
+                pid = int(i.get("id"))
+                qty = int(i.get("qty", 1))
+                if qty < 1:
+                    qty = 1
+                ids.append(pid)
+                req_map[pid] = qty
+            except Exception:
+                continue
+
+        productos = Producto.query.filter(Producto.id.in_(ids), Producto.activo.is_(True)).all()
+        stock_map = {p.id: int(p.stock or 0) for p in productos}
+
+        issues = []
+        for pid in ids:
+            requested = int(req_map.get(pid, 1))
+            available = int(stock_map.get(pid, 0))
+            if requested > available:
+                issues.append({"id": pid, "available": available, "requested": requested})
+
+        return jsonify({"ok": len(issues) == 0, "issues": issues}), 200
+    
+    except Exception as e:
+        return jsonify({"msg": "Error al listar productos", "error": str(e)}), 500
 #------------------
 #------ADMIN-------
 #------------------

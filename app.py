@@ -7,6 +7,7 @@ from routes.pedidos import pedidos_bp
 from routes.auth import auth_bp
 from routes.pagos import pagos_bp
 from routes.envios import envios_bp
+from routes.contacto import contact_bp
 from datetime import timedelta
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
@@ -123,11 +124,13 @@ app.register_blueprint(productos_bp)
 app.register_blueprint(pedidos_bp)
 app.register_blueprint(pagos_bp)
 app.register_blueprint(envios_bp)
-
+app.register_blueprint(contact_bp)
 
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=5000)
+
+
 
 
 #activar venv

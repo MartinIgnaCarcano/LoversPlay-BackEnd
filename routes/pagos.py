@@ -244,9 +244,9 @@ def crear_preferencia_pago():
             "items": mp_items,
             "external_reference": str(pago_mp.id), 
             "back_urls": {
-                "success": f"https://loversplay-six.vercel.app/pagos?status=success&pedido_id={pedido_id}",
-                "failure": "https://loversplay-six.vercel.app/pagos?status=failure",
-                "pending": f"https://loversplay-six.vercel.app/pagos?status=pending&pedido_id={pedido_id}"
+                "success": f"https://mdz.loversplaysexshop.com/pagos?status=success&pedido_id={pedido_id}",
+                "failure": "https://mdz.loversplaysexshop.com/pagos?status=failure",
+                "pending": f"https://mdz.loversplaysexshop.com/pagos?status=pending&pedido_id={pedido_id}"
             },
             "auto_return": "approved",
             "notification_url": os.getenv("MP_NOTIFICATION_URL"),

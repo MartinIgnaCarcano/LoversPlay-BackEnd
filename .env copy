@@ -1,0 +1,24 @@
+#BASE DE DATOS
+DB_USER = "root"
+DB_PASSWORD = ""
+DB_HOST = "127.0.0.1"
+DB_PORT = "3306"
+DB_NAME = "ecommerce"
+DB_TYPE="mysql"
+#MAIL
+MAIL_SERVER="smtp-relay.brevo.com"
+MAIL_PORT="587"
+MAIL_USE_TLS="true"
+MAIL_USE_SSL="false"
+
+MAIL_USERNAME="9fad63001@smtp-brevo.com"
+MAIL_PASSWORD="SRcJ8EPCka0rTsy1"
+MAIL_DEFAULT_SENDER="loversplay.soporte@gmail.com"
+
+ADMIN_EMAIL="loversplay.soporte@gmail.com"
+
+#MP
+MP_ACCESS_TOKEN = "APP_USR-8996751005930022-112715-9268db70d5e2dc631505b74a818b8481-2611950632"
+MP_NOTIFICATION_URL = "https://mckenzie-burthensome-denita.ngrok-free.dev/api/pagos/webhook"
+
+URL_BASE_IMG = "http://localhost:8000/"
