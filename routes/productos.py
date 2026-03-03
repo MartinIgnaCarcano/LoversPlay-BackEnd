@@ -6,7 +6,7 @@ from database import db
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import desc, asc, func, or_
 
-productos_bp = Blueprint("productos", __name__, url_prefix="/api/productos")
+productos_bp = Blueprint("productos", __name__, url_prefix="/productos")
 
 UPLOAD_FOLDER = "static/uploads"
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif"}

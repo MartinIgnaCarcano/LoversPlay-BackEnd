@@ -3,7 +3,7 @@ from services.email_service import send_email  # ajustá el import según tu est
 
 contact_bp = Blueprint("contact", __name__)
 
-@contact_bp.route("/api/contact", methods=["POST"])
+@contact_bp.route("/contact", methods=["POST"])
 def contact():
     data = request.get_json()
 

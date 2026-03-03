@@ -7,7 +7,7 @@ from models import Usuario, Direccion, Favorito
 from database import db
 from services.notifications import send_user_welcome
 
-auth_bp = Blueprint("auth", __name__,url_prefix="/api/auth")
+auth_bp = Blueprint("auth", __name__,url_prefix="/auth")
 
 def require_admin():
     user_id = get_jwt_identity()

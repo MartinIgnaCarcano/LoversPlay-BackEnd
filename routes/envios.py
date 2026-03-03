@@ -3,7 +3,7 @@ from models import ZonaEnvio
 from database import db
 import requests
 
-envios_bp = Blueprint("zona_envios", __name__, url_prefix="/api/envios")
+envios_bp = Blueprint("zona_envios", __name__, url_prefix="/envios")
 
 @envios_bp.route("/", methods=["GET"])
 def listar_zonas():

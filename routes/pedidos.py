@@ -9,7 +9,7 @@ from sqlalchemy import update
 from decimal import Decimal
 from sqlalchemy import update
 
-pedidos_bp = Blueprint("pedidos", __name__,url_prefix="/api/pedidos")
+pedidos_bp = Blueprint("pedidos", __name__,url_prefix="/pedidos")
 
 def require_admin():
     user_id = get_jwt_identity()

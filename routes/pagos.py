@@ -10,7 +10,7 @@ from services.notifications import (
     send_user_transfer_instructions
 )
 
-pagos_bp = Blueprint("pagos", __name__, url_prefix="/api/pagos")
+pagos_bp = Blueprint("pagos", __name__, url_prefix="/pagos")
 sdk = mercadopago.SDK(str(os.getenv("MP_ACCESS_TOKEN")))
 
 @pagos_bp.route("/webhook", methods=["POST", "GET"])

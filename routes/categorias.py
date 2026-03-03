@@ -5,7 +5,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, Categoria, Producto
 from sqlalchemy import func, distinct
 
-categorias_bp = Blueprint("categorias", __name__, url_prefix="/api/categorias")
+categorias_bp = Blueprint("categorias", __name__, url_prefix="/categorias")
 
 UPLOAD_FOLDER = "static/imagenes/categorias"
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif"}
